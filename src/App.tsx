@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RdsData, ConnectionStatus, PTY_RDS, PTY_RBDS, RtPlusTag, EonNetwork, RawGroup, TmcMessage, TmcServiceInfo, PsHistoryItem, RtHistoryItem } from './types';
 import { INITIAL_RDS_DATA } from './constants';
@@ -219,7 +220,7 @@ const App: React.FC = () => {
   const decoderState = useRef<DecoderState>({
     psBuffer: new Array(8).fill(' '),  
     psMask: new Array(8).fill(false),
-    lpsBuffer: new Array(16).fill(' '), 
+    lpsBuffer: new Array(32).fill(' '), // Increased to 32 chars
     ptynBuffer: new Array(8).fill(' '), 
     rtBuffer0: new Array(64).fill(' '), 
     rtBuffer1: new Array(64).fill(' '), 
@@ -945,7 +946,7 @@ const App: React.FC = () => {
              const c3 = decodeRdsByte((g4 >> 8) & 0xFF);
              const c4 = decodeRdsByte(g4 & 0xFF);
              const idx = address * 4;
-             if (idx < 16) {
+             if (idx < 32) { // Changed to 32 to allow up to 8 blocks (Addr 0-7)
                  state.lpsBuffer[idx] = c1; state.lpsBuffer[idx+1] = c2;
                  state.lpsBuffer[idx+2] = c3; state.lpsBuffer[idx+3] = c4;
              }
@@ -953,7 +954,7 @@ const App: React.FC = () => {
              const c1 = decodeRdsByte((g4 >> 8) & 0xFF);
              const c2 = decodeRdsByte(g4 & 0xFF);
              const idx = address * 2;
-             if (idx < 16) {
+             if (idx < 32) { // Changed to 32 to allow up to 16 blocks (Addr 0-15)
                  state.lpsBuffer[idx] = c1; state.lpsBuffer[idx+1] = c2;
              }
         }
