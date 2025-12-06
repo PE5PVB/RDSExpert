@@ -47,7 +47,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
       // Handle "Empty" states logic first
       if (!text || text.length === 0) {
           if (type === 'rt' && rawMode) return <>{Array(64).fill('_').join('')}</>;
-          if (type === 'lps' && rawMode) return <>{Array(16).fill('_').join('')}</>;
+          if (type === 'lps' && rawMode) return <>{Array(32).fill('_').join('')}</>; // Updated to 32
           if (type === 'ps') return <>{Array(8).fill(' ').map((_,i)=><span key={i}>&nbsp;</span>)}</>;
           // For RT, return empty grid structure if empty, to maintain height
           if (type === 'rt') return <>{Array(64).fill(' ').map((_,i)=><span key={i}> </span>)}</>;
@@ -59,7 +59,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
       // Logic Update: Never trim fixed-width fields (PS, LPS, PTYN) AND Radiotext (RT).
       // We must preserve the spaces sent by the station or the empty buffer slots to respect alignment.
       if (type === 'ps' || type === 'lps' || type === 'ptyn') {
-          const len = (type === 'lps') ? 16 : 8;
+          const len = (type === 'lps') ? 32 : 8; // Updated LPS length to 32
           // Pad or truncate to exact length
           processedText = text.padEnd(len, ' ').substring(0, len);
       } else if (type === 'rt') {
