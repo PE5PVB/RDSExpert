@@ -1443,11 +1443,27 @@ const SecurityErrorModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                      </svg>
                 </div>
-                <h3 className="text-xl font-bold text-white">Connection Failed</h3>
-                <p className="text-slate-300 text-sm leading-relaxed">
-                    Unfortunately, due to web browser security restrictions, this tool cannot be used with HTTP servers. Only HTTPS connections are allowed.
-                </p>
-            </div>
+               <h3 className="text-xl font-bold text-white">Connection Failed</h3>
+               <p className="text-slate-300 text-sm leading-relaxed">
+                    Unfortunately, due to web browser security restrictions,
+                    <br />
+                    this tool can only be used with HTTPS servers.
+                    <br />
+                    <br />
+                    You can bypass this limitation and connect to an HTTP server
+                    <br />
+                    by using this version hosted by @Bkram:
+                    <br />
+                    <a 
+                    href="http://rdsexpert.fmdx-webserver.nl:8080/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-400 underline hover:text-blue-300"
+                    >
+                    http://rdsexpert.fmdx-webserver.nl:8080/
+                    </a>
+               </p>
+                </div>
             <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-center">
                 <button onClick={onClose} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded transition-colors uppercase border border-slate-600">
                     Close
