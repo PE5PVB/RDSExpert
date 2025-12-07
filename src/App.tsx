@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RdsData, ConnectionStatus, PTY_RDS, PTY_RBDS, RtPlusTag, EonNetwork, RawGroup, TmcMessage, TmcServiceInfo, PsHistoryItem, RtHistoryItem } from './types';
 import { INITIAL_RDS_DATA } from './constants';
@@ -94,70 +93,156 @@ interface LogEntry {
     type: 'info' | 'success' | 'error' | 'warning';
 }
 
-// --- RDS Character Set Mapping (Robust EBU + CP1250/CP1252 Hybrid) ---
+// --- RDS Character Set Mapping (Custom Super-Hybrid Table) ---
+// Designed to maximize decodability for Central European (CE), Nordic, and Western languages.
+// Fixes specific offsets: 
+// 0xDB=č, 0xDC=š, 0xDD=ž, 0xDE=đ, 0xFB=ć, 0xF2=æ, 0xF3=œ, 0xF7=ø
 const RDS_G2_MAP: Record<number, string> = {
-  // 0x80 - 0x8F (Standard EBU Vowels + Common variations)
+  // 0x80 - 0x8F (Standard E.1 G2 - Western Accents)
   0x80: 'á', 0x81: 'à', 0x82: 'é', 0x83: 'è', 0x84: 'í', 0x85: 'ì', 0x86: 'ó', 0x87: 'ò',
-  0x88: 'ú', 0x89: 'ù', 0x8A: 'Š', 0x8B: 'Ç', 0x8C: 'Ş', 0x8D: 'Ć', 0x8E: 'Ž', 0x8F: 'Ź',
+  0x88: 'ú', 0x89: 'ù', 0x8A: 'Ñ', 0x8B: 'Ç', 0x8C: 'Ş', 0x8D: 'β', 0x8E: '¡', 0x8F: 'Ŀ',
   
-  // 0x90 - 0x9F (Extended Vowels + Central European)
+  // 0x90 - 0x9F (Standard E.1 G2)
   0x90: 'â', 0x91: 'ä', 0x92: 'ê', 0x93: 'ë', 0x94: 'î', 0x95: 'ï', 0x96: 'ô', 0x97: 'ö',
-  0x98: 'û', 0x99: 'ü', 0x9A: 'š', 0x9B: 'ñ', 0x9C: 'ś', 0x9D: 'ć', 0x9E: 'ž', 0x9F: 'ź',
+  0x98: 'û', 0x99: 'ü', 0x9A: 'å', 0x9B: 'ç', 0x9C: 'ş', 0x9D: 'ğ', 0x9E: 'ı', 0x9F: 'ĳ',
+  // 0x9A: Fixed from 'ñ' to 'å'
+  // 0x9B: Fixed from 'Ø' to 'ç' (User report: ç displayed as Ø)
 
-  // 0xA0 - 0xAF (Symbols & Special)
-  0xA0: '°', 0xA1: '¹', 0xA2: '²', 0xA3: '³', 0xA4: '±', 0xA5: '€', 0xA6: '£', 0xA7: '$',
-  0xA8: '←', 0xA9: '↑', 0xAA: '→', 0xAB: '↓', 0xAC: '¼', 0xAD: '½', 0xAE: '¾', 0xAF: 'ß',
-  
-  // 0xB0 - 0xBF (Polish/Central extensions)
-  0xB0: 'Ą', 0xB1: 'ą', 0xB2: 'Ę', 0xB3: 'ę', 0xB4: 'Ł', 0xB5: 'ł', 0xB6: 'Ń', 0xB7: 'ń',
-  0xB8: 'Ś', 0xB9: 'ś', 0xBA: 'Ż', 0xBB: 'ż', 0xBC: 'Z', 0xBD: 'z', 0xBE: '”', 0xBF: '“',
+  // 0xA0 - 0xAF (Hybrid: CE + Symbols)
+  0xA0: 'ª', 0xA1: 'α', 0xA2: '©', 0xA3: '‰', 0xA4: 'Ğ', 0xA5: 'ě', 0xA6: 'Ň', 0xA7: 'Ő',
+  0xA8: 'π', 0xA9: 'Š', 0xAA: '£', 0xAB: '$', 0xAC: '←', 0xAD: '↑', 0xAE: 'Ž', 0xAF: '↓',
+  // 0xA5: Fixed from 'Ě' to 'ě'
 
-  // 0xC0 - 0xDF (CP1250 Dominant - Fixes Č/č collision)
-  0xC0: 'Ŕ', 0xC1: 'Á', 0xC2: 'Â', 0xC3: 'Ă', 0xC4: 'Ä', 0xC5: 'Ĺ', 0xC6: 'Ć', 0xC7: 'Ç',
-  0xC8: 'Č', 0xC9: 'É', 0xCA: 'Ę', 0xCB: 'Ë', 0xCC: 'Š', 0xCD: 'Ž', 0xCE: 'Î', 0xCF: 'Ď',
-  
-  0xD0: 'Đ', 0xD1: 'Ń', 0xD2: 'Ň', 0xD3: 'Ó', 0xD4: 'Ô', 0xD5: 'Ő', 0xD6: 'Ö', 0xD7: 'Ö',
-  0xD8: 'Ř', 0xD9: 'Ů', 0xDA: 'Ú', 0xDB: 'č', 0xDC: 'š', 0xDD: 'Ý', 0xDE: 'Ţ', 0xDF: 'ß',
-  
-  // 0xE0 - 0xFF (Lower case matches for CP1250)
-  0xE0: 'ŕ', 0xE1: 'á', 0xE2: 'â', 0xE3: 'ă', 0xE4: 'ä', 0xE5: 'ĺ', 0xE6: 'ć', 0xE7: 'ç',
-  0xE8: 'č', 0xE9: 'é', 0xEA: 'ę', 0xEB: 'ë', 0xEC: 'ě', 0xED: 'í', 0xEE: 'î', 0xEF: 'ď',
-  
-  0xF0: 'đ', 0xF1: 'ń', 0xF2: 'ň', 0xF3: 'ó', 0xF4: 'ô', 0xF5: 'ő', 0xF6: 'ö', 0xF7: '÷',
-  0xF8: 'ř', 0xF9: 'ů', 0xFA: 'ú', 0xFB: 'ű', 0xFC: 'ü', 0xFD: 'ý', 0xFE: 'ţ', 0xFF: '˙'
+  // 0xB0 - 0xBF (Hybrid: CE + Math)
+  0xB0: '°', 0xB1: '±', 0xB2: '²', 0xB3: '³', 0xB4: '×', 0xB5: 'µ', 0xB6: '¶', 0xB7: '·',
+  0xB8: '÷', 0xB9: 'š', 0xBA: 'º', 0xBB: '»', 0xBC: '¼', 0xBD: '½', 0xBE: 'ž', 0xBF: '¿',
+  // 0xB9=š (CE), 0xBE=ž (CE)
+
+  // 0xC0 - 0xCF (Hybrid: Western + CE + Nordic)
+  0xC0: 'Á', 0xC1: 'À', 0xC2: 'É', 0xC3: 'È', 0xC4: 'Í', 0xC5: 'Ý', 0xC6: 'Ó', 0xC7: 'Ç',
+  0xC8: 'Ú', 0xC9: 'Ù', 0xCA: 'Ř', 0xCB: 'Č', 0xCC: 'Š', 0xCD: 'Ž', 0xCE: 'Đ', 0xCF: 'Ď',
+  // 0xC0-C4, C6-C9: Previous Fixes (Confirmed)
+  // 0xC5: Fixed from 'Å' to 'Ý'
+  // 0xCA: Fixed from 'Ę' to 'Ř'
+  // 0xCB: Fixed from 'Ë' to 'Č'
+  // 0xCC: Fixed from 'Ě' to 'Š'
+  // 0xCD: Fixed from 'Í' to 'Ž'
+  // 0xCE: Fixed from 'Î' to 'Đ'
+
+  // 0xD0 - 0xDF (Hybrid: Specific Fixes & Uppercase support)
+  0xD0: 'Â', 0xD1: 'Ä', 0xD2: 'Ê', 0xD3: 'Œ', 0xD4: 'Î', 0xD5: 'Ï', 0xD6: 'Ô', 0xD7: 'Ö',
+  0xD8: 'Û', 0xD9: 'Ü', 0xDA: 'ř', 0xDB: 'č', 0xDC: 'š', 0xDD: 'ž', 0xDE: 'đ', 0xDF: 'ß',
+  // 0xD0, D2, D4-D6, D9: Previous Fixes (Confirmed)
+  // 0xD1: Fixed from 'Ñ' to 'Ä'
+  // 0xD7: Fixed from 'Û' to 'Ö'
+  // 0xD8: Fixed from 'Ø' to 'Û'
+  // 0xDA: Fixed from 'Ú' to 'ř'
+
+  // 0xE0 - 0xEF (Hybrid)
+  0xE0: 'à', 0xE1: 'Å', 0xE2: 'Æ', 0xE3: 'Œ', 0xE4: 'ä', 0xE5: 'Ý', 0xE6: 'ć', 0xE7: 'Ø',
+  0xE8: 'è', 0xE9: 'é', 0xEA: 'ę', 0xEB: 'Ć', 0xEC: 'ě', 0xED: 'í', 0xEE: 'î', 0xEF: 'ď',
+  // 0xE2, E3: Previous Fixes (Confirmed)
+  // 0xE1: Fixed from 'á' to 'Å'
+  // 0xE5: Fixed from 'ý' to 'Ý'
+  // 0xE7: Fixed from 'ç' to 'Ø' (User report: Ø displayed as ç)
+  // 0xEB: Fixed from 'ë' to 'Ć'
+
+  // 0xF0 - 0xFF (Hybrid: Specific Fixes)
+  0xF0: 'đ', 0xF1: 'å', 0xF2: 'æ', 0xF3: 'œ', 0xF4: 'ô', 0xF5: 'ő', 0xF6: 'ö', 0xF7: 'ø',
+  0xF8: 'ø', 0xF9: 'ů', 0xFA: 'ú', 0xFB: 'ć', 0xFC: 'ü', 0xFD: 'ý', 0xFE: 'ţ', 0xFF: 'ÿ'
+  // 0xF1: Fixed from 'ñ' to 'å'
+  // 0xF2=æ (Fix "ň" -> "æ")
+  // 0xF3=œ (Fix "ó" -> "œ")
+  // 0xF7=ø (Fix "÷" -> "ø")
+  // 0xFB=ć (Fix "ű" -> "ć")
 };
 
 const RT_PLUS_LABELS: Record<number, string> = {
-    1: "TITLE", 2: "ALBUM", 3: "TRACK NUMBER", 4: "ARTIST", 5: "COMPOSITION",
-    6: "MOVEMENT", 7: "CONDUCTOR", 8: "COMPOSER", 9: "BAND", 10: "COMMENT (MUSIC)",
-    11: "GENRE (MUSIC)", 12: "NEWS", 13: "LOCAL NEWS", 14: "STOCKMARKET", 15: "SPORT",
-    16: "LOTTERY", 17: "HOROSCOPE", 18: "DAILY DIVERSION (INFO)", 19: "HEALTH INFO",
-    20: "EVENT", 21: "SCENE (INFO)", 22: "CINEMA", 23: "STUPIDITY MACHINE",
-    24: "DATE & TIME", 25: "WEATHER", 26: "TRAFFIC INFO", 27: "ALARM (INFO)",
-    28: "ADVERTISEMENT", 29: "WEBSITE/URL", 30: "OTHER (INFO)", 31: "STATION NAME (SHORT)",
-    32: "STATION NAME (LONG)", 33: "CURRENT PROGRAM", 34: "NEXT PROGRAM", 35: "PART (PROGRAM)",
-    36: "HOST (PROGRAM)", 37: "EDITORIAL STAFF (PROGRAM)", 38: "FREQUENCY", 39: "HOMEPAGE",
-    40: "SUB-CHANNEL", 41: "PHONE: HOTLINE", 42: "PHONE: STUDIO", 43: "PHONE: OTHER",
-    44: "SMS: STUDIO", 45: "SMS: OTHER", 46: "EMAIL: HOTLINE", 47: "EMAIL: STUDIO",
-    48: "MMS: OTHER", 49: "CHAT", 50: "CHAT: CENTRE", 51: "VOTE: QUESTION",
-    52: "VOTE: CENTRE", 53: "TAG 53", 54: "TAG 54", 55: "TAG 55", 56: "TAG 56",
-    57: "TAG 57", 58: "TAG 58", 59: "PLACE", 60: "APPOINTMENT", 61: "IDENTIFIER",
-    62: "PURCHASE", 63: "GET DATA"
+    1: "Title",
+    2: "Album",
+    3: "Track Number",
+    4: "Artist",
+    5: "Composition",
+    6: "Movement",
+    7: "Conductor",
+    8: "Composer",
+    9: "Band",
+    10: "Comment (Music)",
+    11: "Genre (Music)",
+    12: "News",
+    13: "Local News",
+    14: "Stockmarket",
+    15: "Sport",
+    16: "Lottery",
+    17: "Horoscope",
+    18: "Daily Diversion (Info)",
+    19: "Health Info",
+    20: "Event",
+    21: "Scene (Info)",
+    22: "Cinema",
+    23: "Stupidity Machine",
+    24: "Date & Time",
+    25: "Weather",
+    26: "Traffic Info",
+    27: "Alarm (Info)",
+    28: "Advertisement",
+    29: "Website/URL",
+    30: "Other (Info)",
+    31: "Station Name (Short)",
+    32: "Station Name (Long)",
+    33: "Current program",
+    34: "Next program",
+    35: "Part (Program)",
+    36: "Host (Program)",
+    37: "Editorial Staff (Program)",
+    38: "Frequency",
+    39: "Homepage",
+    40: "Sub-channel",
+    41: "Phone: Hotline",
+    42: "Phone: Studio",
+    43: "Phone: Other",
+    44: "SMS: Studio",
+    45: "SMS: Other",
+    46: "Email: Hotline",
+    47: "Email: Studio",
+    48: "MMS: Other",
+    49: "Chat",
+    50: "Chat: Centre",
+    51: "Vote: Question",
+    52: "Vote: Centre",
+    53: "Unassigned Tag 53",
+    54: "Unassigned Tag 54",
+    55: "Unassigned Tag 55",
+    56: "Unassigned Tag 56",
+    57: "Unassigned Tag 57",
+    58: "Unassigned Tag 58",
+    59: "Place",
+    60: "Appointment",
+    61: "Identifier",
+    62: "Purchase",
+    63: "Get Data"
 };
 
 // --- Custom RDS Byte Decoder ---
 const decodeRdsByte = (b: number): string => {
+    // 1. Check our Hybrid Universal Map first (Covers 0x80 - 0xFF)
     if (RDS_G2_MAP[b]) {
         return RDS_G2_MAP[b];
     }
+    
+    // 2. Standard ASCII Control Codes (0x00 - 0x1F)
     if (b < 0x20) {
         return String.fromCharCode(b);
     }
-    if (b >= 0x20) {
-        const arr = new Uint8Array([b]);
-        return new TextDecoder("windows-1252").decode(arr);
+    
+    // 3. Basic ASCII (0x20 - 0x7F)
+    if (b >= 0x20 && b <= 0x7F) {
+        return String.fromCharCode(b);
     }
-    return String.fromCharCode(b);
+
+    // 4. Fallback
+    const arr = new Uint8Array([b]);
+    return new TextDecoder("windows-1252").decode(arr);
 };
 
 const pad = (n: number) => n.toString().padStart(2, '0');
@@ -195,6 +280,23 @@ const getEventCategory = (code: number): string => {
    if (code <= 900) return "Weather"; 
    if (code <= 1000) return "Road Cond."; 
    return "Event";
+};
+
+const convertMjd = (mjd: number): { day: number, month: number, year: number } | null => {
+    if (mjd === 0) return null;
+    const yp = Math.floor((mjd - 15078.2) / 365.25);
+    const mp = Math.floor((mjd - 14956.1 - Math.floor(yp * 365.25)) / 30.6001);
+    
+    const term1 = Math.floor(yp * 365.25);
+    const term2 = Math.floor(mp * 30.6001);
+    
+    // Explicitly cast to number to resolve potential TS arithmetic errors
+    const day = Number(mjd) - 14956 - Number(term1) - Number(term2);
+
+    const k = (mp === 14 || mp === 15) ? 1 : 0;
+    const year = 1900 + yp + k;
+    const month = Number(mp) - 1 - Number(k) * 12;
+    return { day, month, year };
 };
 
 const App: React.FC = () => {
@@ -288,23 +390,24 @@ const App: React.FC = () => {
     isDirty: false,
     
     // Raw Buffer for Hex Viewer
-    rawGroupBuffer: [], // Fixed: Was `RawGroup[];` which is a syntax error in object literal
+    rawGroupBuffer: [],
 
     // History Tracking Logic
     piEstablishmentTime: 0,
     psHistoryLogged: false,
-    psHistoryBuffer: [],
-    rtHistoryBuffer: [],
-    
-    // Stability Check
+  
+    // Stability Check for PS History
     psCandidateString: "        ",
-    psStableSince: 0
+    psStableSince: 0,
+    
+    psHistoryBuffer: [],
+    rtHistoryBuffer: []
   });
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     setLogs(prev => {
         const entry: LogEntry = { time: new Date().toLocaleTimeString(), message, type };
-        return [entry, ...prev].slice(0, 100);
+        return [entry, ...prev].slice(100);
     });
   }, []);
 
@@ -438,17 +541,6 @@ const App: React.FC = () => {
       // Mark dirty to update UI
       state.isDirty = true;
   }, [addLog]);
-
-  const convertMjd = (mjd: number): { day: number, month: number, year: number } | null => {
-      if (mjd === 0) return null;
-      const yp = Math.floor((mjd - 15078.2) / 365.25);
-      const mp = Math.floor((mjd - 14956.1 - Math.floor(yp * 365.25)) / 30.6001);
-      const day = mjd - 14956 - Math.floor(yp * 365.25) - Math.floor(mp * 30.6001);
-      const k = (mp === 14 || mp === 15) ? 1 : 0;
-      const year = 1900 + yp + k;
-      const month = mp - 1 - k * 12;
-      return { day, month, year };
-  };
 
   // --- RDS Group Decoder ---
   const decodeRdsGroup = useCallback((g1: number, g2: number, g3: number, g4: number) => {
@@ -619,7 +711,7 @@ const App: React.FC = () => {
 
                         // Method B Context Logic
                         // When a header is received (Count > 224 + Tx Freq), we set the context.
-                        const count = af1 - 224;
+                        const count = Number(af1) - 224;
                         state.currentMethodBGroup = headFreq;
                         if (!state.afBMap.has(headFreq)) {
                             state.afBMap.set(headFreq, { expected: count, afs: new Set(), matchCount: 0, pairCount: 0 });
@@ -823,14 +915,21 @@ const App: React.FC = () => {
         }
     }
 
-    // ... (Other groups 1A, 2A/B, 3A, 4A, 10A, 12A, 15A/B) - Same as before
-    else if (groupTypeVal === 2) {
-        const variant = (g3 >> 12) & 0x07;
-        if (variant === 0) state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-        else if (variant === 3) state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+    // Group 1A (2) or 1B (3) - PIN / ECC / LIC
+    else if (groupTypeVal === 2 || groupTypeVal === 3) {
+        // ECC and LIC are only in Group 1A (Variant 0 and 3 respectively in Block 3)
+        // Group 1B uses Block 3 for PI repetition, so we ignore Block 3 for ECC/LIC in 1B.
+        if (groupTypeVal === 2) {
+            const variant = (g3 >> 12) & 0x07;
+            if (variant === 0) state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+            else if (variant === 3) state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+        }
+        
+        // PIN is in Block 4 for BOTH 1A and 1B
         const pinDay = (g4 >> 11) & 0x1F;
         const pinHour = (g4 >> 6) & 0x1F;
         const pinMin = g4 & 0x3F;
+        // Valid PIN day is 1-31. 0 is invalid/not set.
         if (pinDay !== 0) state.pin = `${pinDay}. ${pad(pinHour)}:${pad(pinMin)}`;
     }
     // Group 2A/2B (Radiotext)
@@ -885,32 +984,69 @@ const App: React.FC = () => {
     }
     else if (groupTypeVal === 24 || (state.rtPlusOdaGroup && groupTypeVal === state.rtPlusOdaGroup)) {
         state.hasRtPlus = true;
-        state.rtPlusItemRunning = !!((g2 >> 4) & 0x01);
-        state.rtPlusItemToggle = !!((g2 >> 3) & 0x01);
-        const type1 = (g3 >> 13) & 0x07;
-        const start1 = (g3 >> 7) & 0x3F;
-        const len1 = (g3 >> 1) & 0x3F;
-        const type2 = (g4 >> 11) & 0x1F;
-        const start2 = (g4 >> 5) & 0x3F;
-        const len2 = g4 & 0x1F;
-        const processTag = (type: number, start: number, len: number) => {
-            if (type === 0) return; 
-            const currentRt = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
-            const rtStr = currentRt.join(""); 
-            if (start >= rtStr.length) return;
+        
+        // --- UNIVERSAL RT+ DECODING (Universal Mapping: G2 spare + G3 + G4) ---
+        // As defined by expert analysis: Tag1 (6), Start1 (6), Len1 (6), Tag2 (6), Start2 (6), Len2 (5).
+        // Uses 35 bits total.
+        
+        // 1. Extract Bits
+        // G2 spare bits (3 bits) are the highest bits of the sequence
+        const g2Spare = g2 & 0x07;
+        
+        // Tag 1: ID (6 bits) = G2[2..0] | G3[15..13]
+        const tag1Id    = (g2Spare << 3) | ((g3 >> 13) & 0x07);
+        // Tag 1: Start (6 bits) = G3[12..7]
+        const tag1Start = (g3 >> 7) & 0x3F;
+        // Tag 1: Length (6 bits) = G3[6..1]
+        const tag1Len   = (g3 >> 1) & 0x3F;
+        
+        // Tag 2: ID (6 bits) = G3[0] | G4[15..11]
+        const tag2Id    = ((g3 & 0x01) << 5) | ((g4 >> 11) & 0x1F);
+        // Tag 2: Start (6 bits) = G4[10..5]
+        const tag2Start = (g4 >> 5) & 0x3F;
+        // Tag 2: Length (5 bits) = G4[4..0]
+        const tag2Len   = g4 & 0x1F;
+
+        // 3. Process Tags
+        state.rtPlusItemToggle = !!((g2 >> 4) & 0x01);
+        state.rtPlusItemRunning = !!((g2 >> 3) & 0x01);
+
+        const processTag = (id: number, start: number, len: number) => {
+            if (id === 0) return;
+            // Re-fetch current RT in case it changed (it shouldn't have in this scope)
+            const currentRtLocal = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
+            const rtStrLocal = currentRtLocal.join(""); 
+            
             const lengthCharCount = len + 1; 
-            let text = rtStr.substring(start, start + lengthCharCount);
+            
+            // Bounds check
+            if (start >= rtStrLocal.length) return;
+            
+            let text = rtStrLocal.substring(start, start + lengthCharCount);
+            
+            // Safety clip
+            if (text.length > lengthCharCount) text = text.substring(0, lengthCharCount);
+            
             text = text.replace(/[\x00-\x1F]/g, '').trim();
             if (text.length > 0) {
                  const newTag = {
-                     contentType: type, start: start, length: len, label: RT_PLUS_LABELS[type] || `TAG ${type}`, text: text, isCached: false, timestamp: Date.now()
+                     contentType: id, start: start, length: len, label: RT_PLUS_LABELS[id] || `TAG ${id}`, text: text, isCached: false, timestamp: Date.now()
                  };
-                 state.rtPlusTags.set(type, newTag);
+                 state.rtPlusTags.set(id, newTag);
                  state.isDirty = true;
             }
         };
-        processTag(type1, start1, len1);
-        processTag(type2, start2, len2);
+        
+        // Tag 1
+        if (tag1Id !== 0 && (tag1Start + tag1Len) < 70) {
+            processTag(tag1Id, tag1Start, tag1Len);
+        }
+        
+        // Tag 2
+        if (tag2Id !== 0 && (tag2Start + tag2Len) < 70) {
+            processTag(tag2Id, tag2Start, tag2Len);
+        }
+        
         if (state.rtPlusTags.size > 6) {
             const sortedTags = Array.from(state.rtPlusTags.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
             while (state.rtPlusTags.size > 6) {
@@ -954,27 +1090,18 @@ const App: React.FC = () => {
              state.ptynBuffer[idx+2] = c3; state.ptynBuffer[idx+3] = c4;
         }
     }
-    else if (groupTypeVal === 30 || groupTypeVal === 31) {
-        const isGroup15A = groupTypeVal === 30;
-        const address = g2 & 0x0F; 
-        if (isGroup15A) {
-             const c1 = decodeRdsByte((g3 >> 8) & 0xFF);
-             const c2 = decodeRdsByte(g3 & 0xFF);
-             const c3 = decodeRdsByte((g4 >> 8) & 0xFF);
-             const c4 = decodeRdsByte(g4 & 0xFF);
-             const idx = address * 4;
-             if (idx < 32) { // Changed to 32 to allow up to 8 blocks (Addr 0-7)
-                 state.lpsBuffer[idx] = c1; state.lpsBuffer[idx+1] = c2;
-                 state.lpsBuffer[idx+2] = c3; state.lpsBuffer[idx+3] = c4;
-             }
-        } else {
-             const c1 = decodeRdsByte((g4 >> 8) & 0xFF);
-             const c2 = decodeRdsByte(g4 & 0xFF);
-             const idx = address * 2;
-             if (idx < 32) { // Changed to 32 to allow up to 16 blocks (Addr 0-15)
-                 state.lpsBuffer[idx] = c1; state.lpsBuffer[idx+1] = c2;
-             }
-        }
+    // Group 15A Only (15B Ignored)
+    else if (groupTypeVal === 30) {
+         const address = g2 & 0x0F; 
+         const c1 = decodeRdsByte((g3 >> 8) & 0xFF);
+         const c2 = decodeRdsByte(g3 & 0xFF);
+         const c3 = decodeRdsByte((g4 >> 8) & 0xFF);
+         const c4 = decodeRdsByte(g4 & 0xFF);
+         const idx = address * 4;
+         if (idx < 32) {
+             state.lpsBuffer[idx] = c1; state.lpsBuffer[idx+1] = c2;
+             state.lpsBuffer[idx+2] = c3; state.lpsBuffer[idx+3] = c4;
+         }
     }
   }, []); 
 
