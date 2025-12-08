@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RdsData, ConnectionStatus, PTY_RDS, PTY_RBDS, RtPlusTag, EonNetwork, RawGroup, TmcMessage, TmcServiceInfo, PsHistoryItem, RtHistoryItem } from './types';
 import { INITIAL_RDS_DATA } from './constants';
@@ -349,7 +350,7 @@ const App: React.FC = () => {
     rtStableSince: 0,
     afSet: [], 
     afListHead: null, 
-    lastGroup0A3: null,
+    lastGroup0A3: null, // Initialized correctly
     afBMap: new Map<string, AfBEntry>(),
     currentMethodBGroup: null,
     afType: 'Unknown',
@@ -976,13 +977,17 @@ const App: React.FC = () => {
             }
         }
     }
+    // Group 3A: ODA Identification
     else if (groupTypeVal === 6) {
+        // AID for Radiotext+ is 4BD7
         if (g3 === 0x4BD7 || g4 === 0x4BD7) {
+            // Application Group Type Code is in Block 2 bits 4-0 (0-31)
             const appGroup = g2 & 0x1F;
             state.rtPlusOdaGroup = appGroup;
         }
     }
-    else if (groupTypeVal === 24 || (state.rtPlusOdaGroup && groupTypeVal === state.rtPlusOdaGroup)) {
+    // RT+ Decoding: Only if ODA Group detected match
+    else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup) {
         state.hasRtPlus = true;
         
         // --- UNIVERSAL RT+ DECODING (Universal Mapping: G2 spare + G3 + G4) ---
