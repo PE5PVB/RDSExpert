@@ -1,6 +1,7 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { RdsData, ConnectionStatus, PTY_RDS, PTY_RBDS, RtPlusTag, EonNetwork, RawGroup, TmcMessage, TmcServiceInfo, PsHistoryItem, RtHistoryItem } from './types';
-import { INITIAL_RDS_DATA } from './constants';
+import { INITIAL_RDS_DATA, ODA_MAP } from './constants';
 import { LcdDisplay } from './components/LcdDisplay';
 import { InfoGrid } from './components/InfoGrid';
 import { GroupAnalyzer } from './components/GroupAnalyzer';
@@ -57,6 +58,7 @@ interface DecoderState {
   rtPlusItemRunning: boolean;
   rtPlusItemToggle: boolean;
   hasOda: boolean;
+  odaApp: { name: string; aid: string; group: string } | undefined;
   hasRtPlus: boolean;
   hasEon: boolean;
   hasTmc: boolean;
@@ -375,6 +377,7 @@ const App: React.FC = () => {
     rtPlusItemRunning: false,
     rtPlusItemToggle: false,
     hasOda: false,
+    odaApp: undefined,
     hasRtPlus: false,
     hasEon: false,
     hasTmc: false,
@@ -500,6 +503,7 @@ const App: React.FC = () => {
       state.rtPlusItemRunning = false;
       state.rtPlusItemToggle = false;
       state.hasOda = false;
+      state.odaApp = undefined;
       state.hasRtPlus = false;
       state.hasEon = false;
       state.hasTmc = false;
@@ -586,6 +590,7 @@ const App: React.FC = () => {
             state.rtPlusItemToggle = false;
             // Reset Flags on PI Change
             state.hasOda = false;
+            state.odaApp = undefined;
             state.hasRtPlus = false;
             state.hasEon = false;
             state.hasTmc = false;
@@ -983,6 +988,27 @@ const App: React.FC = () => {
     // Group 3A: ODA Identification - Strict Dynamic Handshake
     else if (groupTypeVal === 6) {
         state.hasOda = true; 
+        
+        const b3 = g3;
+        const b4 = g4;
+        
+        const b3Hex = b3.toString(16).toUpperCase().padStart(4, '0');
+        const b4Hex = b4.toString(16).toUpperCase().padStart(4, '0');
+        
+        // AID detection logic: Standard is Block 3, fallback Block 4
+        let aidHex = b3Hex;
+        if (b3 === 0) aidHex = b4Hex;
+        else if (!ODA_MAP[b3Hex] && ODA_MAP[b4Hex]) aidHex = b4Hex;
+        
+        const appGroupCode = g2 & 0x1F;
+        const groupNum = appGroupCode >> 1;
+        const groupVer = (appGroupCode & 1) ? 'B' : 'A';
+        const targetGroup = `${groupNum}${groupVer}`;
+        
+        const odaName = ODA_MAP[aidHex] || "Unknown ODA";
+        
+        state.odaApp = { name: odaName, aid: aidHex, group: targetGroup };
+
         // AID for Radiotext+ is 4BD7
         if (g3 === 0x4BD7 || g4 === 0x4BD7) {
             // Application Group Type Code is in Block 2 bits 4-0 (0-31)
@@ -1211,7 +1237,7 @@ const App: React.FC = () => {
                 tp: state.tp, ta: state.ta, ms: state.ms, stereo: state.diStereo, artificialHead: state.diArtificialHead, compressed: state.diCompressed, dynamicPty: state.diDynamicPty,
                 ecc: state.ecc, lic: state.lic, pin: state.pin, localTime: state.localTime, utcTime: state.utcTime,
                 textAbFlag: state.abFlag, rtPlus: sortedRtPlusTags, rtPlusItemRunning: state.rtPlusItemRunning, rtPlusItemToggle: state.rtPlusItemToggle,
-                hasOda: state.hasOda, hasRtPlus: state.hasRtPlus, hasEon: state.hasEon, hasTmc: state.hasTmc,
+                hasOda: state.hasOda, odaApp: state.odaApp, hasRtPlus: state.hasRtPlus, hasEon: state.hasEon, hasTmc: state.hasTmc,
                 eonData: eonDataObj,
                 tmcServiceInfo: {...state.tmcServiceInfo}, 
                 tmcMessages: [...state.tmcBuffer],
