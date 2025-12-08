@@ -1,6 +1,49 @@
 
 import { RdsData } from './types';
 
+// ODA AID Mapping
+export const ODA_MAP: Record<string, string> = {
+    "CD46": "TMC (Traffic Message Channel)",
+    "4BD7": "Radiotext+",
+    "0093": "DAB Cross-Referencing",
+    "CD9E": "EWS (Emergency Warning System)",
+    "C737": "eRT (Enhanced Radiotext)",
+    "E1C1": "Action Code",
+    "C4D4": "iTunes Tagging",
+    "CD47": "TMC (Traffic Message Channel)",
+    "48D8": "Radiotext+",
+    "4400": "RDS-Light",
+    "A112": "NL Alert System",
+    "ABCF": "RF Power Monitoring",
+    "E411": "Beacon Downlink",
+    "E123": "APS Gateway",
+    "C3C3": "NAVTEQ Traffic Plus",
+    "C3B0": "iTunes Tagging",
+    "C3A1": "Personal Radio Service",
+    "6A7A": "Warning Receiver",
+    "6365": "RDS2",
+    "5757": "Personal Weather Station",
+    "7373": "Enhanced Early Warning System",
+    "CB73": "CITIBUS 1",
+    "4C59": "CITIBUS 2",
+    "CC21": "CITIBUS 3",
+    "1DC2": "CITIBUS 4",
+    "4AA1": "RASANT",
+    "A911": "Data FM Messaging",
+    "FF7F": "RFT Station Logo",
+    "FF80": "RFT Slideshow",
+    "CD19": "TokenMe",
+    "FF70": "Internet Connection",
+    "FF81": "RFT Journaline",
+    "BE22": "Push-Ad",
+    "ABCE": "Fleximax by Worldcast Systems",
+    "C563": "ID Logic",
+    "E911": "EAS Open Protocol",
+    "C350": "NRSC Title and Artist",
+    "C549": "Smart Grid Broadcast Channel",
+    "C6A7": "Veil Enabled Interactive Device"
+};
+
 export const INITIAL_RDS_DATA: RdsData = {
   pi: "----",
   ps: "--------",
@@ -12,6 +55,7 @@ export const INITIAL_RDS_DATA: RdsData = {
   rtPlusItemRunning: false,
   rtPlusItemToggle: false,
   hasOda: false,
+  odaApp: undefined,
   hasRtPlus: false,
   hasEon: false,
   hasTmc: false,
