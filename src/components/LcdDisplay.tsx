@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS } from '../types';
 
 interface LcdDisplayProps {
@@ -117,6 +117,11 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
   // Check if we actually have RT data to determine if indicators should be lit
   const hasRtA = data.rtA && data.rtA.trim().length > 0;
   const hasRtB = data.rtB && data.rtB.trim().length > 0;
+
+  // Prepare ODA Tooltip
+  const odaTooltip = data.odaApp 
+    ? `${data.odaApp.name} [${data.odaApp.aid}] on Group ${data.odaApp.group}` 
+    : undefined;
 
   return (
     <div className="bg-[#0f172a] border-4 border-slate-700 rounded-lg p-6 shadow-[0_0_20px_rgba(15,23,42,0.8)] relative overflow-hidden group">
@@ -244,7 +249,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
 
         {/* Service Flags (RT+, EON, TMC) - Right */}
         <div className="shrink-0 flex items-center justify-center gap-2 bg-slate-900/40 rounded p-2 border border-slate-800/50">
-            <FlagBadge active={data.hasOda} label="ODA" color="purple" />
+            <FlagBadge active={data.hasOda} label="ODA" color="purple" tooltip={odaTooltip} />
             <FlagBadge active={data.hasRtPlus} label="RT+" color="green" />
             <FlagBadge active={data.hasEon} label="EON" color="yellow" />
             <FlagBadge active={data.hasTmc} label="TMC" alert />
@@ -317,7 +322,26 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
   );
 };
 
-const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple' }> = ({ active, label, alert, color }) => {
+const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple'; tooltip?: string }> = ({ active, label, alert, color, tooltip }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = () => {
+    if (tooltip && active) {
+      timerRef.current = setTimeout(() => {
+        setShowTooltip(true);
+      }, 200);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setShowTooltip(false);
+  };
+
   let activeClass = "text-blue-300 bg-blue-900/20 border-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]";
 
   if (alert) {
@@ -333,9 +357,17 @@ const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; col
   const inactiveClass = "text-slate-700 bg-slate-900/50 border-slate-800 opacity-50";
 
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300`}>
-      {label}
-    </span>
+    <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300 cursor-default`}>
+          {label}
+        </span>
+        {showTooltip && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-[10px] font-mono whitespace-nowrap rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200">
+                {tooltip}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+            </div>
+        )}
+    </div>
   );
 };
 
