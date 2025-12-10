@@ -202,8 +202,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${!data.textAbFlag && hasRtA ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
           <div className="flex-1 bg-slate-800/30 rounded py-2 px-4 overflow-hidden min-h-[56px] flex items-center border border-transparent transition-colors duration-300 relative">
-             {/* Selection Border: Active if flag is A */}
-             {!data.textAbFlag && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
+             {/* Selection Border: Active if flag is A AND has content */}
+             {!data.textAbFlag && hasRtA && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
              <span className="font-mono text-xl md:text-2xl text-slate-200 whitespace-pre break-all leading-tight">
                <RenderEnhancedText text={data.rtA} type="rt" />
              </span>
@@ -218,8 +218,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${data.textAbFlag && hasRtB ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
           <div className="flex-1 bg-slate-800/30 rounded py-2 px-4 overflow-hidden min-h-[56px] flex items-center relative">
-             {/* Selection Border: Active if flag is B */}
-             {data.textAbFlag && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
+             {/* Selection Border: Active if flag is B AND has content */}
+             {data.textAbFlag && hasRtB && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
              <span className="font-mono text-xl md:text-2xl text-slate-200 whitespace-pre break-all leading-tight">
                <RenderEnhancedText text={data.rtB} type="rt" />
              </span>
