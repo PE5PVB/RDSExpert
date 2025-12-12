@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { RdsData } from '../types';
 import { ODA_MAP } from '../constants';
@@ -33,15 +32,33 @@ const GROUP_COLORS: Record<string, string> = {
     // 4: Clock (Pink)
     "4A": "text-pink-500",
     "4B": "text-pink-500",
+    // 5: TDC (Violet)
+    "5A": "text-violet-400",
+    "5B": "text-violet-400",
+    // 6: IH (Violet)
+    "6A": "text-violet-400",
+    "6B": "text-violet-400",
+    // 7: RP (Violet)
+    "7A": "text-violet-400",
+    "7B": "text-violet-400",
     // 8: TMC (Red)
     "8A": "text-red-500",
     "8B": "text-red-500",
+    // 9: EWS (Violet)
+    "9A": "text-violet-400",
+    "9B": "text-violet-400",
     // 10: PTYN (Orange)
     "10A": "text-orange-400",
     "10B": "text-orange-400",
+    // 11: ODA (Violet)
+    "11A": "text-violet-400",
+    "11B": "text-violet-400",
     // 12: RT+ (Violet)
     "12A": "text-violet-400",
     "12B": "text-violet-400",
+    // 13: RP (Violet)
+    "13A": "text-violet-400",
+    "13B": "text-violet-400",
     // 14: EON (Yellow)
     "14A": "text-yellow-400",
     "14B": "text-yellow-400",
