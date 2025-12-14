@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { RdsData, PTY_RDS, PTY_RBDS } from '../types';
+import { RdsData, PTY_RDS, PTY_RBDS, PsHistoryItem, RtHistoryItem } from '../types';
 
 interface HistoryControlsProps {
   data: RdsData;
@@ -168,60 +167,56 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
             </button>
         </div>
 
-        {/* Modal: PS History */}
+        {/* Modal: PS History using Generic Viewer */}
         {showPsHistory && (
-            <HistoryModal title="PS / PTY HISTORY (LIMITED TO 200 ENTRIES)" onClose={() => setShowPsHistory(false)}>
-                <table className="w-full text-left text-sm font-mono">
-                    <thead>
-                        <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0">
-                            <th className="p-3 w-24">Time</th>
-                            <th className="p-3 w-32">PS</th>
-                            <th className="p-3">PTY</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.psHistory.map((item, i) => (
-                            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                <td className="p-3 text-slate-400 border-r border-slate-800/50">{item.time}</td>
-                                <td className="p-3 border-r border-slate-800/50">
-                                    <span className="text-white font-bold tracking-widest whitespace-pre bg-slate-800 px-2 py-1 rounded shadow-sm">{item.ps}</span>
-                                </td>
-                                <td className="p-3 text-slate-400">
-                                    {ptyList[item.pty] || "Unknown"} <span className="text-xs opacity-50 ml-1">[{item.pty}]</span>
-                                </td>
-                            </tr>
-                        ))}
-                        {data.psHistory.length === 0 && (
-                            <tr><td colSpan={3} className="p-6 text-center text-slate-500 italic">No PS / PTY data recorded for now.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </HistoryModal>
+            <HistoryViewer 
+                title="PS / PTY HISTORY (LIMITED TO 200 ENTRIES)"
+                onClose={() => setShowPsHistory(false)}
+                data={data.psHistory}
+                getCopyText={(item: PsHistoryItem) => `[${item.time}] ${item.ps} (PTY: ${ptyList[item.pty] || item.pty})`}
+                renderHeader={() => (
+                    <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+                        <th className="p-3 w-24">Time</th>
+                        <th className="p-3 w-32">PS</th>
+                        <th className="p-3">PTY</th>
+                    </tr>
+                )}
+                renderRow={(item: PsHistoryItem, i) => (
+                    <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <td className="p-3 text-slate-400 border-r border-slate-800/50">{item.time}</td>
+                        <td className="p-3 border-r border-slate-800/50">
+                            <span className="text-white font-bold tracking-widest whitespace-pre bg-slate-800 px-2 py-1 rounded shadow-sm">{item.ps}</span>
+                        </td>
+                        <td className="p-3 text-slate-400">
+                            {ptyList[item.pty] || "Unknown"} <span className="text-xs opacity-50 ml-1">[{item.pty}]</span>
+                        </td>
+                    </tr>
+                )}
+                emptyMessage="No PS / PTY data recorded for now."
+            />
         )}
 
-        {/* Modal: RT History */}
+        {/* Modal: RT History using Generic Viewer */}
         {showRtHistory && (
-            <HistoryModal title="RADIOTEXT HISTORY (LIMITED TO 200 ENTRIES)" onClose={() => setShowRtHistory(false)}>
-                <table className="w-full text-left text-sm font-mono">
-                    <thead>
-                        <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0">
-                            <th className="p-3 w-24">Time</th>
-                            <th className="p-3">Radiotext</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.rtHistory.map((item, i) => (
-                            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
-                                <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">{item.text}</td>
-                            </tr>
-                        ))}
-                        {data.rtHistory.length === 0 && (
-                            <tr><td colSpan={2} className="p-6 text-center text-slate-500 italic">No complete Radiotext messages recorded for now.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </HistoryModal>
+            <HistoryViewer 
+                title="RADIOTEXT HISTORY (LIMITED TO 200 ENTRIES)"
+                onClose={() => setShowRtHistory(false)}
+                data={data.rtHistory}
+                getCopyText={(item: RtHistoryItem) => `[${item.time}] ${item.text}`}
+                renderHeader={() => (
+                    <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+                        <th className="p-3 w-24">Time</th>
+                        <th className="p-3">Radiotext</th>
+                    </tr>
+                )}
+                renderRow={(item: RtHistoryItem, i) => (
+                    <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                        <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
+                        <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">{item.text}</td>
+                    </tr>
+                )}
+                emptyMessage="No complete Radiotext messages recorded for now."
+            />
         )}
 
         {/* Modal: Export Text */}
@@ -237,15 +232,114 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
   );
 };
 
-const HistoryModal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode }> = ({ title, onClose, children }) => {
+// --- GENERIC HISTORY VIEWER COMPONENT (Handles Pause & Copy) ---
+interface HistoryViewerProps<T> {
+    title: string;
+    data: T[];
+    onClose: () => void;
+    renderHeader: () => React.ReactNode;
+    renderRow: (item: T, index: number) => React.ReactNode;
+    getCopyText: (item: T) => string;
+    emptyMessage: string;
+}
+
+const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, emptyMessage }: HistoryViewerProps<T>) => {
+    const [paused, setPaused] = useState(false);
+    const [frozenData, setFrozenData] = useState<T[]>([]);
+    const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
+
+    // Display frozen data if paused, otherwise live data
+    const displayData = paused ? frozenData : data;
+
+    const togglePause = () => {
+        if (!paused) {
+            // Freezing current data
+            setFrozenData([...data]);
+        }
+        setPaused(!paused);
+    };
+
+    const handleCopy = () => {
+        const text = displayData.map(getCopyText).join('\n');
+        navigator.clipboard.writeText(text).then(() => {
+            setCopyStatus('COPIED');
+            setTimeout(() => setCopyStatus('IDLE'), 2000);
+        });
+    };
+
+    const actions = (
+        <div className="flex items-center gap-2 ml-4">
+             {/* Pause Button */}
+             <button 
+                onClick={togglePause}
+                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors uppercase flex items-center gap-1.5 ${paused ? 'bg-yellow-900/40 text-yellow-400 border-yellow-600 hover:bg-yellow-900/60' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'}`}
+                title={paused ? "Resume scrolling" : "Pause scrolling"}
+            >
+                {paused ? (
+                    <>
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        RESUME
+                    </>
+                ) : (
+                    <>
+                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                         PAUSE
+                    </>
+                )}
+             </button>
+
+             {/* Copy Button */}
+             <button 
+                onClick={handleCopy}
+                className={`px-2 py-1 text-[10px] font-bold rounded border transition-colors uppercase flex items-center gap-1.5 ${copyStatus === 'COPIED' ? 'bg-green-900/40 text-green-400 border-green-600' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'}`}
+                title="Copy content to clipboard"
+             >
+                 {copyStatus === 'COPIED' ? (
+                     <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        COPIED
+                     </>
+                 ) : (
+                     <>
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                        COPY
+                     </>
+                 )}
+             </button>
+        </div>
+    );
+
+    return (
+        <HistoryModal title={title} onClose={onClose} actions={actions}>
+            <table className="w-full text-left text-sm font-mono">
+                <thead>
+                    {renderHeader()}
+                </thead>
+                <tbody>
+                    {displayData.map((item, i) => renderRow(item, i))}
+                    {displayData.length === 0 && (
+                        <tr><td colSpan={10} className="p-6 text-center text-slate-500 italic">{emptyMessage}</td></tr>
+                    )}
+                </tbody>
+            </table>
+        </HistoryModal>
+    );
+};
+
+// Added 'actions' prop to HistoryModal
+const HistoryModal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-3 border-b border-slate-800 bg-slate-900">
-                    <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        {title}
-                    </h3>
+                    <div className="flex items-center">
+                        <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {title}
+                        </h3>
+                        {/* Actions buttons inserted here */}
+                        {actions}
+                    </div>
                     <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors p-1 rounded hover:bg-slate-800">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
