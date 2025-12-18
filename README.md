@@ -247,7 +247,10 @@ Although this technology is becoming increasingly deprecated and is being phased
 For example, as of December 10, 2025: The United Kingdom still sends this type of data through the Classic FM network, and Germany also sends this information on the ARD network stations.
 <br>
 <br>
-The information displayed on the screen consists of the various traffic information events sent through the `TMC` service (e.g. Road closures, congestion, accident, etc.).
+The information displayed on the screen consists of the various traffic information events sent through the `TMC` service, with details if available (e.g. Road closures, congestion, accident, etc.). About 1500 messages can be recognized and decoded.
+<br>
+To preserve the web browsers performance, the display limit of unique messages is set to 500.
+<br>
 <br>
 The decoder includes an update counter that increases each time a message is sent for the same event.
 <br>
