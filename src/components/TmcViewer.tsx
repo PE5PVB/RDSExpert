@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { RdsData, TmcMessage } from '../types';
 
@@ -86,7 +85,7 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
 
             {active ? (
                 /* 3. Main Split View (Dark Mode) */
-                <div className="flex flex-col md:flex-row h-64 bg-slate-950 text-slate-300 font-sans text-xs">
+                <div className="flex flex-col md:flex-row h-64 bg-slate-950 text-slate-300 font-sans text-sm">
                     
                     {/* Left: Message List */}
                     <div className="flex-1 overflow-y-auto border-r border-slate-800 custom-scrollbar">
