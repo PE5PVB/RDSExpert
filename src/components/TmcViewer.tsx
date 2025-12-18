@@ -66,10 +66,6 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
             {active && (
                 <div className="bg-slate-900 text-slate-300 text-xs font-mono border-b border-slate-700 flex items-center p-1 px-4 gap-8 shadow-inner">
                      <div className="flex items-center gap-1">
-                         <span className="font-bold text-slate-500">Provider:</span>
-                         <span className="font-bold">{data.tmcServiceInfo.providerName}</span>
-                     </div>
-                     <div className="flex items-center gap-1">
                          <span className="font-bold text-slate-500">LTN:</span>
                          <span className="font-bold">{data.tmcServiceInfo.ltn || "--"}</span>
                      </div>
