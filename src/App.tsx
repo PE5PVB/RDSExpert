@@ -185,7 +185,7 @@ const RDS_G2_MAP: Record<number, string> = {
   0xBD: '½', 
   0xBE: 'ž', 
   0xBF: '¿',
-  // 0xC0 - 0xCF (Support tchèque étendu)
+  // 0xC0 - 0xCF
   0xC0: 'Á', 
   0xC1: 'À', 
   0xC2: 'É', 
@@ -348,7 +348,7 @@ const renderRdsBuffer = (chars: string[]): string => {
     })
   );
   
-  // Detection de bit haut pour UTF-8
+  // High bit detection for UTF-8
   const hasHighBits = bytes.some((b) => b > 127);
   
   if (hasHighBits) {
@@ -357,7 +357,7 @@ const renderRdsBuffer = (chars: string[]): string => {
       const decoded = utf8Decoder.decode(bytes);
       return decoded.replace(/\0/g, ' ');
     } catch (e) {
-      // Echec UTF-8, on bascule sur le décodage RDS standard
+      // Switching to standard RDS decoding in case of UTF-8 failure
     }
   }
   
@@ -397,7 +397,7 @@ const getDurationLabel = (code: number): { label: string, minutes: number } => {
   }
 };
 
-// Intelligence métier TMC : Détermination de la nature de l'événement
+// Determining the nature of the TMC events
 const getEventNature = (code: number): string => {
   if (code >= 1 && code <= 150) return "Traffic Flow";
   if (code >= 200 && code <= 399) return "Accident/Incident";
@@ -412,7 +412,7 @@ const getEventNature = (code: number): string => {
   return "Information"; 
 };
 
-// Intelligence métier TMC : Détermination de l'urgence
+// Determining the emergency level of the TMC events
 const getEventUrgency = (code: number): string => {
   if (code >= 900 && code <= 1000) return "High Priority";
   if (code >= 200 && code <= 250) return "High Priority";
@@ -449,7 +449,11 @@ const convertMjd = (mjd: number): { day: number, month: number, year: number } |
 
 const App: React.FC = () => {
   const [rdsData, setRdsData] = useState<RdsData>(INITIAL_RDS_DATA);
-  const [serverUrl, setServerUrl] = useState<string>(''); 
+  const [serverUrl, setServerUrl] = useState<string>(() => {
+    // Initialization from the ?url= parameter if present
+    const params = new URLSearchParams(window.location.search);
+    return params.get('url') || '';
+  }); 
   const [status, setStatus] = useState<ConnectionStatus>(ConnectionStatus.DISCONNECTED);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [lastRawPacket, setLastRawPacket] = useState<string>("Waiting for data...");
@@ -500,7 +504,6 @@ const App: React.FC = () => {
     tp: false,
     ta: false,
     ms: false,
-    // Fix: provide initial false values instead of type annotations
     diStereo: false,
     diArtificialHead: false,
     diCompressed: false,
@@ -531,7 +534,6 @@ const App: React.FC = () => {
     groupTotal: 0,
     groupSequence: [],
     
-    // Fix: replaced type annotations with actual initial values in object literal
     graceCounter: GRACE_PERIOD_PACKETS,
     isDirty: false,
     
@@ -1421,6 +1423,14 @@ const App: React.FC = () => {
       addLog(`Connection Failed: ${msg}`, 'error'); 
     }
   };
+
+  // Ajout de l'auto-connexion si le paramètre 'url' est présent dans l'URL de la page
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('url')) {
+      connect();
+    }
+  }, []);
 
   const disconnect = () => { 
     if (wsRef.current) { 
