@@ -173,7 +173,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
                 title="PS / PTY HISTORY (LIMITED TO 200 ENTRIES)"
                 onClose={() => setShowPsHistory(false)}
                 data={data.psHistory}
-                getCopyText={(item: PsHistoryItem) => `[${item.time}] ${item.ps} (PTY: ${ptyList[item.pty] || item.pty})`}
+                getCopyText={(item: PsHistoryItem) => `[${item.time}] ${item.ps}`}
                 renderHeader={() => (
                     <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
                         <th className="p-3 w-24">Time</th>
