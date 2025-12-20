@@ -193,6 +193,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
                     </tr>
                 )}
                 emptyMessage="No PS / PTY data recorded for now."
+                copyReverse={true}
             />
         )}
 
@@ -216,6 +217,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
                     </tr>
                 )}
                 emptyMessage="No complete Radiotext messages recorded for now."
+                copyReverse={true}
             />
         )}
 
@@ -241,9 +243,10 @@ interface HistoryViewerProps<T> {
     renderRow: (item: T, index: number) => React.ReactNode;
     getCopyText: (item: T) => string;
     emptyMessage: string;
+    copyReverse?: boolean;
 }
 
-const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, emptyMessage }: HistoryViewerProps<T>) => {
+const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, emptyMessage, copyReverse }: HistoryViewerProps<T>) => {
     const [paused, setPaused] = useState(false);
     const [frozenData, setFrozenData] = useState<T[]>([]);
     const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
@@ -260,7 +263,11 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
     };
 
     const handleCopy = () => {
-        const text = displayData.map(getCopyText).join('\n');
+        let itemsToCopy = [...displayData];
+        if (copyReverse) {
+            itemsToCopy.reverse();
+        }
+        const text = itemsToCopy.map(getCopyText).join('\n');
         navigator.clipboard.writeText(text).then(() => {
             setCopyStatus('COPIED');
             setTimeout(() => setCopyStatus('IDLE'), 2000);
