@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { RdsData } from '../types';
 import { ODA_MAP } from '../constants';
@@ -244,44 +243,21 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
       if (data.recentGroups.length > 0) {
           data.recentGroups.forEach(grp => {
               if (grp.type === '3A') {
-                  const b3 = grp.blocks[2];
                   const b4 = grp.blocks[3];
-
-                  const b3Hex = b3.toString(16).toUpperCase().padStart(4, '0');
-                  const b4Hex = b4.toString(16).toUpperCase().padStart(4, '0');
-                  
-                  // Standard says AID is in Block 3.
-                  // However, some stations or configurations might place it in Block 4 (e.g. CD46 for TMC).
-                  // Priority Logic:
-                  // 1. If Block 3 is empty (0) -> Use Block 4
-                  // 2. If Block 3 is NOT in our ODA_MAP, but Block 4 IS -> Use Block 4
-                  // 3. Otherwise (Standard or both unknown) -> Use Block 3
-                  
-                  let aidHex = b3Hex;
-                  
-                  if (b3 === 0) {
-                      aidHex = b4Hex;
-                  } else if (!ODA_MAP[b3Hex] && ODA_MAP[b4Hex]) {
-                      aidHex = b4Hex;
-                  }
+                  const aidHex = b4.toString(16).toUpperCase().padStart(4, '0');
                   
                   // Decode Target Group from Block 2 (bits 4-0)
                   const appGroupCode = grp.blocks[1] & 0x1F;
                   const groupNum = appGroupCode >> 1;
                   const groupVer = (appGroupCode & 1) ? 'B' : 'A';
-                  // Code 0 usually refers to group 0A.
                   const targetGroup = `${groupNum}${groupVer}`;
                   
                   const odaName = ODA_MAP[aidHex] || "Unknown ODA";
                   
-                  // "ODA detected (3A): [TYPE] [[CODE]] on Group [GROUP]"
                   const logLine = `ODA detected (3A): ${odaName} [${aidHex}] on Group ${targetGroup}`;
 
                   setOdaLogs(prev => {
-                      // Dedup: if line already exists in the list, don't add it again.
-                      // This avoids flooding the 5-line buffer with identical detections.
                       if (prev.includes(logLine)) return prev;
-                      
                       return [logLine, ...prev].slice(0, 5);
                   });
               }
@@ -331,7 +307,6 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                         const hex = grp.blocks.map(b => b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
                         
                         // Detailed Breakdown
-                        // B2 structure: Group(5) | TP(1) | PTY(5) | ....
                         const b2Bin = toBin(g2, 16); 
                         const b3Bin = toBin(g3, 16);
                         const b4Bin = toBin(g4, 16);
@@ -362,8 +337,6 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
           setViewMode('STREAM'); // Toggle off -> go back to stream
       } else {
           setViewMode(mode);
-          // Clear logs when entering a new mode to avoid confusion
-          // Note: If paused, these will remain empty until unpaused or until manual clear
           if (mode === 'DETAIL') setDetailLogs([]);
           if (mode === 'HEX') setHexLogs({ 0: [], 1: [], 2: [], 3: [] });
       }
@@ -582,9 +555,6 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                         const percentage = validTotal > 0 ? ((count / validTotal) * 100).toFixed(1) : "0.0";
                         const hasData = count > 0;
                         
-                        // Determine background style
-                        // Fixed Logic: If data exists, it is active (Slate 800). No threshold blinking.
-                        // Removed opacity-50 from the container style to prevent tooltip dimming
                         let bgStyle = "bg-slate-950/50 border-slate-800";
                         if (hasData) {
                              bgStyle = "bg-slate-800 border-slate-600 text-slate-200 shadow-sm";
