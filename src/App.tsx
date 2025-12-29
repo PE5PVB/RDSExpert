@@ -1462,20 +1462,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-300 font-sans selection:bg-blue-500/30">
-      {/* Mobile Orientation Warning Overlay */}
-      <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0f172a] text-center p-8 md:hidden portrait:flex landscape:hidden">
-        <div className="mb-6 text-blue-500 animate-pulse">
-           <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ transform: 'rotate(90deg)' }}>
-             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-           </svg>
-        </div>
-        <p className="text-white text-lg font-bold leading-tight">
-          The mobile version is optimized for landscape mode only.
-        </p>
-        <p className="text-blue-400 text-lg font-bold mt-2">
-          Please rotate your smartphone!
-        </p>
-      </div>
 
       {showSecurityError && (
         <SecurityErrorModal onClose={() => setShowSecurityError(false)} />
