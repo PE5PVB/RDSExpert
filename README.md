@@ -47,7 +47,7 @@ Below, you will find a list of the elements that RDSExpert can decode and displa
 <b>Fortunately, it's possible to bypass this limitation by using the HTTP version hosted by [@Bkram](https://github.com/bkram/).</b> Follow the on-screen instructions when you indicate an HTTP URL, and you'll be able to use the tool that way.
 <br>
 <br>
-RDSExpert is designed for desktop use. <b>The interface isn't optimized for smartphones yet, but this is planned for the near future!<b/>
+<b>RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
 <br>
 <br>
 Special thanks to [@mrwish7](https://github.com/mrwish7/) for the initial implementation of WebSocket decoding, without which creating this tool would have been much more complicated. Thanks also to everyone who offers suggestions, provides feedback on the decoder's functionality, and so on.
