@@ -123,9 +123,10 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
   const ptyList = rdsStandard === 'RDS' ? PTY_RDS : PTY_RBDS;
   const currentPtyName = ptyList[data.pty] || "Unknown";
 
-  // Check if we actually have RT data to determine if indicators should be lit
-  const hasRtA = data.rtA && data.rtA.trim().length > 0;
-  const hasRtB = data.rtB && data.rtB.trim().length > 0;
+  // Check if we actually have RT groups received to determine if indicators should be lit
+  const isRtActive = (data.groupCounts['2A'] || 0) > 0 || (data.groupCounts['2B'] || 0) > 0;
+  const hasRtA = isRtActive; 
+  const hasRtB = isRtActive;
 
   // Prepare ODA Tooltip (Multiline)
   const odaTooltip = data.odaList.length > 0
@@ -234,7 +235,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
 
         {/* 2. PS Name (Center - Fixed Width 8 Chars) */}
         <div className="flex flex-col items-center shrink-0 mx-auto">
-            <span className="text-xs text-slate-500 font-mono mb-1 uppercase tracking-widest hidden md:block">Program Service (PS)</span>
+            <span className="text-[10px] md:text-xs text-slate-500 font-mono mb-1 uppercase tracking-widest block">Program Service (PS)</span>
             <div className="bg-slate-900/50 rounded border border-slate-800 p-1 md:p-2 shadow-inner">
                  <div className="bg-slate-800/30 px-2 md:px-4 py-1 rounded border border-slate-700/50 min-w-[180px] md:min-w-[260px] flex justify-center">
                      <span className="text-4xl md:text-6xl font-mono font-bold text-white whitespace-pre tracking-widest leading-none">
@@ -246,7 +247,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
 
         {/* 3. BER (Right) */}
         <div className="flex flex-col items-center shrink-0">
-             <span className="text-xs text-slate-500 font-mono mb-1 uppercase tracking-widest hidden md:block">BER</span>
+             <span className="text-[10px] md:text-xs text-slate-500 font-mono mb-1 uppercase tracking-widest block">BER</span>
              <div className="bg-slate-900/50 rounded border border-slate-800 p-1 md:p-2 shadow-inner flex justify-center">
                <div className="bg-slate-800/30 px-2 md:px-4 py-1 rounded border border-slate-700/50 min-w-[80px] md:min-w-[100px] flex justify-center">
                  <span className={`text-4xl md:text-5xl font-mono font-bold leading-none ${berColor}`}>
@@ -265,7 +266,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
         <div className={`flex flex-col md:flex-row items-start md:space-x-4 transition-opacity duration-300 ${!data.textAbFlag ? 'opacity-100' : 'opacity-60'}`}>
           <div className="flex flex-row md:flex-col items-center space-x-2 md:space-x-0 md:space-y-2 pt-2 mb-1 md:mb-0">
              <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center">RT A</span>
-             {/* Blue indicator only active if flag is A (false) AND we have actual content */}
+             {/* Blue indicator active if flag is A (false) AND Radiotext groups detected */}
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${!data.textAbFlag && hasRtA ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
           <div className="w-full flex-1 min-w-0 bg-slate-800/30 rounded py-2 px-4 min-h-[56px] flex items-center border border-transparent transition-colors duration-300 relative overflow-x-auto no-scrollbar">
@@ -281,7 +282,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
         <div className={`flex flex-col md:flex-row items-start md:space-x-4 transition-opacity duration-300 ${data.textAbFlag ? 'opacity-100' : 'opacity-60'}`}>
           <div className="flex flex-row md:flex-col items-center space-x-2 md:space-x-0 md:space-y-2 pt-2 mb-1 md:mb-0">
             <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center">RT B</span>
-             {/* Blue indicator only active if flag is B (true) AND we have actual content */}
+             {/* Blue indicator active if flag is B (true) AND Radiotext groups detected */}
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${data.textAbFlag && hasRtB ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
           <div className="w-full flex-1 min-w-0 bg-slate-800/30 rounded py-2 px-4 min-h-[56px] flex items-center relative overflow-x-auto no-scrollbar">
