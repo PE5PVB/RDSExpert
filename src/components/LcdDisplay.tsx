@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
@@ -250,8 +249,9 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, rdsStandard, onRes
              <span className="text-[10px] md:text-xs text-slate-500 font-mono mb-1 uppercase tracking-widest block">BER</span>
              <div className="bg-slate-900/50 rounded border border-slate-800 p-1 md:p-2 shadow-inner flex justify-center">
                <div className="bg-slate-800/30 px-2 md:px-4 py-1 rounded border border-slate-700/50 min-w-[80px] md:min-w-[100px] flex justify-center">
-                 <span className={`text-4xl md:text-5xl font-mono font-bold leading-none ${berColor}`}>
-                   {Math.round(data.ber)}<span className="text-xl md:text-2xl ml-1">%</span>
+                 <span className={`text-4xl md:text-5xl font-mono font-bold leading-none ${data.ber === -1 ? 'text-slate-400' : berColor}`}>
+                   {data.ber === -1 ? '--' : Math.round(data.ber)}
+                   {data.ber !== -1 && <span className="text-xl md:text-2xl ml-1">%</span>}
                  </span>
                </div>
              </div>
@@ -447,7 +447,7 @@ const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; col
   } else if (color === 'green') {
       activeClass = "text-green-400 bg-green-900/20 border-green-500/50 shadow-[0_0_8px_rgba(34,197,94,0.3)]";
   } else if (color === 'yellow') {
-      activeClass = "text-yellow-400 bg-green-900/20 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]";
+      activeClass = "text-yellow-400 bg-yellow-900/20 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]";
   } else if (color === 'purple') {
       activeClass = "text-purple-400 bg-purple-900/20 border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.3)]";
   }
