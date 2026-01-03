@@ -403,7 +403,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                   onClick={() => toggleMode('DETAIL')}
                   className={`px-2 py-1 text-[10px] uppercase font-bold rounded border transition-colors ${viewMode === 'DETAIL' ? 'bg-blue-900 text-blue-200 border-blue-500' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
               >
-                  {viewMode === 'DETAIL' ? 'CLOSE CONTENT' : 'SHOW GROUPS CONTENT'}
+                  {viewMode === 'DETAIL' ? 'CLOSE GROUPS CONTENT' : 'SHOW GROUPS CONTENT'}
               </button>
 
               <button
