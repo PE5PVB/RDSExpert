@@ -32,36 +32,38 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
     content += `Generated on: ${now}\n`;
     content += `==================================================\n\n`;
 
-    // 1. Basic Station Info
+    // 1. Main RDS information
     content += `[1] MAIN RDS INFORMATION\n`;
     content += `------------------------\n`;
-    content += `PI Code:      ${data.pi}\n`;
-    content += `PS Name:      ${psFormatted}\n`;
+    content += `PI:           ${data.pi}\n`;
+    content += `PS:           ${psFormatted}\n`;
     content += `PTY:          ${ptyName}\n`;
-    content += `PTYN:         ${data.ptyn || "N/A"}\n`;
-    content += `Long PS:      ${data.longPs || "N/A"}\n`;
+    const ptynRaw = (data.ptyn || "").replace(/\r/g, '');
+    content += `PTYN:         ${ptynRaw.trim() ? ptynRaw : "N/A"}\n`;
+    const lpsRaw = (data.longPs || "").replace(/\r/g, '');
+    content += `Long PS:      ${lpsRaw.trim() ? lpsRaw : "N/A"}\n`;
     content += `ECC:          ${data.ecc || "N/A"}\n`;
     content += `LIC:          ${data.lic || "N/A"}\n\n`;
 
-    // 2. Times & Flags
-    content += `[2] CLOCK TIME (CT), PIN & FLAGS\n`;
-    content += `--------------------------------\n`;
+    // 2. Flags, decoder identification, clock time and PIN
+    content += `[2] FLAGS / DECODER IDENTIFICATION (DI) / CLOCK TIME (CT) / PIN\n`;
+    content += `---------------------------------------------------------------\n`;
+    content += `Flags:        TP = ${data.tp ? '1' : '0'} | TA = ${data.ta ? '1' : '0'} | MS = ${data.ms ? 'Music' : 'Speech'}\n`;
+    content += `DI:           Stereo = ${data.stereo ? '1' : '0'} | Artificial Head = ${data.artificialHead ? '1' : '0'} | Compressed = ${data.compressed ? '1' : '0'} | Dynamic PTY = ${data.dynamicPty ? '1' : '0'}\n`;
     content += `Local Time:   ${data.localTime || "N/A"}\n`;
     content += `UTC Time:     ${data.utcTime || "N/A"}\n`;
-    content += `PIN:          ${data.pin || "N/A"}\n`;
-    content += `Main Flags:   TP = ${data.tp ? '1' : '0'} | TA = ${data.ta ? '1' : '0'} | MS = ${data.ms ? 'Music' : 'Speech'}\n`;
-    content += `Secondary Flags: Stereo = ${data.stereo ? '1' : '0'} | Artificial Head = ${data.artificialHead ? '1' : '0'} | Compressed = ${data.compressed ? '1' : '0'} | Dynamic PTY = ${data.dynamicPty ? '1' : '0'}\n\n`;
+    content += `PIN:          ${data.pin || "N/A"}\n\n`;
 
-    // 3. Current Text
-    content += `[3] CURRENT RADIOTEXT\n`;
-    content += `---------------------\n`;
-    content += `Radiotext A:  ${data.rtA || ""}\n`;
-    content += `Radiotext B:  ${data.rtB || ""}\n\n`;
+    // 3. Radiotext
+    content += `[3] RADIOTEXT\n`;
+    content += `-------------\n`;
+    content += `Line A:  ${(data.rtA || "").replace(/\r/g, '')}\n`;
+    content += `Line B:  ${(data.rtB || "").replace(/\r/g, '')}\n\n`;
 
-    // 4. Frequencies
+    // 4. AF
     content += `[4] ALTERNATIVE FREQUENCIES (AF)\n`;
     content += `--------------------------------\n`;
-    content += `Method:       ${data.afType}\n`;
+    content += `Method: ${data.afType}\n`;
     if (data.afType === 'B') {
         Object.entries(data.afBLists).forEach(([head, list]) => {
             const freqs = list as string[];
@@ -73,60 +75,61 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, rdsStand
     content += `\n`;
 
     // 5. RT+
-    content += `[5] RADIOTEXT+\n`;
-    content += `--------------\n`;
+    content += `[5] RADIOTEXT+ TAGS\n`;
+    content += `-------------------\n`;
     if (data.rtPlus.length > 0) {
         data.rtPlus.forEach(tag => {
             content += `  - ${tag.label} (ID ${tag.contentType}): "${tag.text}"\n`;
         });
     } else {
-        content += `  No RT+ tags detected.\n`;
+        content += `  No Radiotext+ tags detected.\n`;
     }
     content += `\n`;
 
     // 6. EON
-    content += `[6] EON (ENHANCED OTHER NETWORKS)\n`;
-    content += `--------------------------------\n`;
+    content += `[6] ENHANCED OTHER NETWORKS (EON)\n`;
+    content += `---------------------------------\n`;
     const eonKeys = Object.keys(data.eonData);
     if (eonKeys.length > 0) {
         eonKeys.forEach(key => {
             const net = data.eonData[key];
             content += `  PI: ${net.pi} | PS: ${net.ps}\n`;
             if (net.af.length > 0) {
-                content += `    Freqs: [${net.af.join(', ')}]\n`;
+                content += `    AF Method A: [${net.af.join(', ')}]\n`;
             }
             if (net.mappedFreqs.length > 0) {
-                content += `    Mapped Freqs: [${net.mappedFreqs.join(', ')}]\n`;
+                content += `    Mapped Frequencies: [${net.mappedFreqs.join(', ')}]\n`;
             }
         });
     } else {
-        content += `  No EON data.\n`;
+        content += `  No EON data decoded.\n`;
     }
     content += `\n`;
 
-    // 7. TMC
-    content += `[7] TMC MESSAGES (${data.tmcMessages.length})\n`;
-    content += `--------------------------\n`;
-    if (data.tmcMessages.length > 0) {
-        data.tmcMessages.forEach(msg => {
-            content += `  [${msg.receivedTime}] Loc ${msg.locationCode}: ${msg.label} (${msg.nature})\n`;
+    // 7. ODA
+    content += `[7] OPEN DATA APPLICATIONS (ODA)\n`;
+    content += `--------------------------------\n`;
+    if (data.odaList.length > 0) {
+        data.odaList.forEach(oda => {
+            content += `  - ${oda.name} [AID: ${oda.aid}]\n`;
         });
     } else {
-        content += `  No TMC messages.\n`;
+        content += `  No ODA AID detected on Group 3A.\n`;
     }
     content += `\n`;
 
-    // 8. History Dump
-    content += `[8] RADIOTEXT HISTORY (LIMITED TO 200 ENTRIES)\n`;
-    content += `----------------------------------------------\n`;
-    data.rtHistory.forEach(h => {
+    // 8. Radiotext History
+    content += `[8] RADIOTEXT HISTORY\n`;
+    content += `---------------------\n`;
+    [...data.rtHistory].reverse().forEach(h => {
         content += `  [${h.time}] ${h.text}\n`;
     });
     content += `\n`;
 
-    content += `[9] PS / PTY HISTORY (LIMITED TO 200 ENTRIES)\n`;
-    content += `---------------------------------------------\n`;
-    data.psHistory.forEach(h => {
+    // 9. PS and PTY History
+    content += `[9] PS / PTY HISTORY\n`;
+    content += `--------------------\n`;
+    [...data.psHistory].reverse().forEach(h => {
         content += `  [${h.time}] ${h.ps} (PTY: ${h.pty})\n`;
     });
 
