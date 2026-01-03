@@ -66,10 +66,10 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
     if (data.afType === 'B') {
         Object.entries(data.afBLists).forEach(([head, list]) => {
             const freqs = list as string[];
-            content += `  Tx ${head} MHz: [${freqs.join(', ')}]\n`;
+            content += `  Tx ${head} MHz: [${freqs.join(' / ')}]\n`;
         });
     } else {
-        content += `  List: [${data.af.join(', ')}]\n`;
+        content += `  List: [${data.af.join(' / ')}]\n`;
     }
     content += `\n`;
 
@@ -94,10 +94,10 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
             const net = data.eonData[key];
             content += `  PI: ${net.pi} | PS: ${net.ps}\n`;
             if (net.af.length > 0) {
-                content += `    AF Method A: [${net.af.join(', ')}]\n`;
+                content += `    AF Method A: [${net.af.join(' / ')}]\n`;
             }
             if (net.mappedFreqs.length > 0) {
-                content += `    Mapped Frequencies: [${net.mappedFreqs.join(', ')}]\n`;
+                content += `    Mapped Frequencies: [${net.mappedFreqs.join(' / ')}]\n`;
             }
         });
     } else {
