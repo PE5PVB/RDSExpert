@@ -1,4 +1,3 @@
-
 import { RdsData } from './types';
 
 // ODA AID Mapping
@@ -1673,7 +1672,7 @@ export const INITIAL_RDS_DATA: RdsData = {
   eonData: {},
   tmcServiceInfo: { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Unavailable]" },
   tmcMessages: [],
-  ber: 0,
+  ber: -1,
   rssi: 0,
   snr: 0,
   groupCounts: {},
