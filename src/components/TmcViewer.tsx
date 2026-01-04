@@ -115,7 +115,7 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
                                  {data.tmcMessages.length === 0 && (
                                      <tr>
                                          <td colSpan={4} className="p-8 text-center italic text-slate-600">
-                                             Waiting for TMC Group 8A messages...
+                                             Waiting for TMC messages on Group 8A...
                                          </td>
                                      </tr>
                                  )}
