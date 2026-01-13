@@ -62,6 +62,7 @@ interface DecoderState {
   localTime: string;
   utcTime: string;
   pty: number;
+  ptynAbFlag: boolean;
   tp: boolean;
   ta: boolean;
   ms: boolean;
@@ -110,6 +111,8 @@ interface DecoderState {
   // Stability Check for PS History
   psCandidateString: string;
   psStableSince: number;
+  ptynCandidateString: string;
+  ptynStableSince: number;
   
   psHistoryBuffer: PsHistoryItem[];
   rtHistoryBuffer: RtHistoryItem[];
@@ -474,7 +477,7 @@ const App: React.FC = () => {
   const BER_WINDOW_SIZE = 40; 
   const GRACE_PERIOD_PACKETS = 10; 
 
-  // Correct initialization of DecoderState with proper initial values
+  // Fixed initialization: using values instead of types in object literal
   const decoderState = useRef<DecoderState>({
     psBuffer: new Array(8).fill(' '),  
     psMask: new Array(8).fill(false),
@@ -495,13 +498,13 @@ const App: React.FC = () => {
     currentPi: "----",
     piCandidate: "----",
     piCounter: 0,
-    // Corrected type-as-value initialization by using default values
     ecc: "",
     lic: "",
     pin: "",
     localTime: "",
     utcTime: "",
     pty: 0,
+    ptynAbFlag: false,
     tp: false,
     ta: false,
     ms: false,
@@ -514,7 +517,9 @@ const App: React.FC = () => {
     rtPlusItemRunning: false,
     rtPlusItemToggle: false,
     hasOda: false,
+    // Initialize with undefined as requested by comment
     odaApp: undefined,
+    // Initialize with empty array
     odaList: [],
     hasRtPlus: false,
     hasEon: false,
@@ -536,15 +541,22 @@ const App: React.FC = () => {
     groupSequence: [],
     
     graceCounter: GRACE_PERIOD_PACKETS,
+    // Use boolean value instead of type reference to fix potential runtime errors
     isDirty: false,
     
     // Raw Buffer for Hex Viewer
     rawGroupBuffer: [],
+
+    // History Tracking Logic - Initializing with default values
+    piEstablishmentTime: 0, 
+    psHistoryLogged: false, 
     
-    piEstablishmentTime: 0,
-    psHistoryLogged: false,
+    // Stability Check for PS History
     psCandidateString: "        ",
     psStableSince: 0,
+    ptynCandidateString: "        ",
+    ptynStableSince: 0,
+    
     psHistoryBuffer: [],
     rtHistoryBuffer: []
   });
@@ -633,7 +645,6 @@ const App: React.FC = () => {
     state.rtStableSince = 0;
 
     state.afSet = [];
-    // Corrected assignment from colon to equals
     state.afListHead = null;
     state.afBMap.clear();
     state.currentMethodBGroup = null;
@@ -656,6 +667,7 @@ const App: React.FC = () => {
     state.localTime = "";
     state.utcTime = "";
     state.pty = 0;
+    state.ptynAbFlag = false;
     state.tp = false;
     state.ta = false;
     state.ms = false; 
@@ -677,11 +689,11 @@ const App: React.FC = () => {
     state.rtHistoryBuffer = [];
     state.psCandidateString = "        ";
     state.psStableSince = 0;
+    state.ptynCandidateString = "        ";
+    state.ptynStableSince = 0;
 
     berHistoryRef.current = [];
     state.graceCounter = GRACE_PERIOD_PACKETS;
-    
-    // Fixed: reset rawGroupBuffer correctly
     state.rawGroupBuffer = [];
     
     state.isDirty = true;
@@ -715,7 +727,6 @@ const App: React.FC = () => {
         state.rtStableSince = 0;
 
         state.afSet = [];
-        // Corrected assignment from colon to equals
         state.afListHead = null;
         state.afBMap.clear();
         state.currentMethodBGroup = null;
@@ -737,6 +748,7 @@ const App: React.FC = () => {
         state.localTime = "";
         state.utcTime = "";
         state.pty = 0;
+        state.ptynAbFlag = false;
         state.tp = false;
         state.ta = false;
         state.ms = false;
@@ -765,6 +777,8 @@ const App: React.FC = () => {
         state.rtHistoryBuffer = [];
         state.psCandidateString = "        ";
         state.psStableSince = 0;
+        state.ptynCandidateString = "        ";
+        state.ptynStableSince = 0;
 
         berHistoryRef.current = [];
         state.graceCounter = GRACE_PERIOD_PACKETS;
@@ -844,7 +858,6 @@ const App: React.FC = () => {
             const headFreq = decodeAf(af2);
             if (headFreq) {
               processMethodAFreq(headFreq);
-              // Corrected assignment from colon to equals
               state.afListHead = headFreq;
               const headIdx = state.afSet.indexOf(headFreq);
               if (headIdx > 0) {
@@ -1156,6 +1169,11 @@ const App: React.FC = () => {
         state.localTime = `${pad(lDate.getUTCDate())}/${pad(lDate.getUTCMonth() + 1)}/${lDate.getUTCFullYear()} ${pad(lDate.getUTCHours())}:${pad(lDate.getUTCMinutes())}`;
       }
     } else if (groupTypeVal === 20) {
+      const newFlag = !!((g2 >> 4) & 0x01);
+      if (state.ptynAbFlag !== newFlag) {
+        state.ptynAbFlag = newFlag;
+        state.ptynBuffer.fill(' '); // Force reset of PTYN value specifically when flag changes
+      }
       const address = g2 & 0x01; 
       state.ptynBuffer[address * 4] = String.fromCharCode((g3 >> 8) & 0xFF);
       state.ptynBuffer[address * 4 + 1] = String.fromCharCode(g3 & 0xFF);
@@ -1180,20 +1198,27 @@ const App: React.FC = () => {
       if (state.isDirty || state.rawGroupBuffer.length > 0) {
         const now = Date.now();
         const currentPs = renderRdsBuffer(state.psBuffer);
+        const currentPtyn = renderRdsBuffer(state.ptynBuffer);
         
         if (currentPs !== state.psCandidateString) { 
           state.psCandidateString = currentPs; 
           state.psStableSince = now; 
         }
+
+        if (currentPtyn !== state.ptynCandidateString) {
+          state.ptynCandidateString = currentPtyn;
+          state.ptynStableSince = now;
+        }
         
-        if (state.piEstablishmentTime > 0 && (now - state.piEstablishmentTime > 3000) && state.currentPi !== "----" && (now - state.psStableSince) >= 1000) {
+        if (state.piEstablishmentTime > 0 && (now - state.piEstablishmentTime > 3000) && state.currentPi !== "----" && (now - state.psStableSince) >= 1000 && (now - state.ptynStableSince) >= 1000) {
           const last = state.psHistoryBuffer[0];
-          if (currentPs.trim().length > 0 && (!last || last.ps !== currentPs)) { 
+          if (currentPs.trim().length > 0 && (!last || last.ps !== currentPs || last.pty !== state.pty || last.ptyn !== currentPtyn)) { 
             state.psHistoryBuffer.unshift({ 
               time: new Date().toLocaleTimeString(), 
               pi: state.currentPi, 
               ps: currentPs, 
-              pty: state.pty 
+              pty: state.pty,
+              ptyn: currentPtyn
             }); 
             if (state.psHistoryBuffer.length > 200) {
               state.psHistoryBuffer.pop();
@@ -1245,6 +1270,7 @@ const App: React.FC = () => {
           pi: state.currentPi, 
           pty: state.pty, 
           ptyn: renderRdsBuffer(state.ptynBuffer), 
+          ptynAbFlag: state.ptynAbFlag,
           tp: state.tp, 
           ta: state.ta, 
           ms: state.ms, 
@@ -1283,6 +1309,8 @@ const App: React.FC = () => {
           groupTotal: state.groupTotal, 
           groupSequence: analyzerActiveRef.current ? [...state.groupSequence] : prev.groupSequence, 
           recentGroups: recent, 
+          rtAMask: [...state.rtMask0],
+          rtBMask: [...state.rtMask1],
           psHistory: [...state.psHistoryBuffer], 
           rtHistory: [...state.rtHistoryBuffer]
         }));

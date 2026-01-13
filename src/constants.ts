@@ -1,3 +1,4 @@
+
 import { RdsData } from './types';
 
 // ODA AID Mapping
@@ -1653,6 +1654,7 @@ export const INITIAL_RDS_DATA: RdsData = {
   pty: 0,
   ptyName: "",
   ptyn: "",
+  ptynAbFlag: false,
   af: [],
   afListHead: null,
   afBLists: {}, 
@@ -1679,6 +1681,8 @@ export const INITIAL_RDS_DATA: RdsData = {
   groupTotal: 0,
   groupSequence: [],
   recentGroups: [],
+  rtAMask: new Array(64).fill(false),
+  rtBMask: new Array(64).fill(false),
   psHistory: [],
   rtHistory: []
 };

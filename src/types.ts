@@ -18,6 +18,7 @@ export interface RdsData {
   pty: number;         // Program Type (0-31)
   ptyName?: string;    // Decoded PTY Name (Optional, derived in components usually)
   ptyn: string;        // Program Type Name (8 chars, via Group 10A)
+  ptynAbFlag: boolean; // PTYN A/B Flag (Group 10A Block 2 Bit 4)
   af: string[];        // Alternative Frequencies (Method A flat list)
   afListHead: string | null; // Head of AF List (Method A)
   afBLists: Record<string, string[]>; // Method B Grouping (Key=Tx Freq, Value=AF List)
@@ -46,6 +47,10 @@ export interface RdsData {
   groupSequence: string[]; // History of last N groups ["0A", "2A", ...]
   recentGroups: RawGroup[]; // Buffer of raw groups received since last frame
   
+  // RadioText Decoding Masks
+  rtAMask: boolean[];
+  rtBMask: boolean[];
+
   // History
   psHistory: PsHistoryItem[];
   rtHistory: RtHistoryItem[];
@@ -62,6 +67,7 @@ export interface PsHistoryItem {
     pi: string;
     ps: string;
     pty: number;
+    ptyn: string;
 }
 
 export interface RtHistoryItem {
