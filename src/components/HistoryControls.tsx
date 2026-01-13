@@ -211,7 +211,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
         {/* Modal: PS History using Generic Viewer */}
         {showPsHistory && (
             <HistoryViewer 
-                title="PS / PTY / PTYN HISTORY (LIMITED TO 200 ENTRIES)"
+                title="PS / PTY / PTYN HISTORY (MAX: 200 ENTRIES)"
                 onClose={() => setShowPsHistory(false)}
                 data={data.psHistory}
                 getCopyText={(item: PsHistoryItem, u: boolean) => `[${item.time}] PS: ${u ? item.ps.replace(/ /g, '_') : item.ps} | PTY: ${ptyList[item.pty] || item.pty} | PTYN: ${item.ptyn}`}
