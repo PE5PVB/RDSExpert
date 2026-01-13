@@ -7,7 +7,7 @@ interface LcdDisplayProps {
   onReset: () => void;
 }
 
-type UnderscoreMode = 'OFF' | 'ALL' | 'PS_ONLY' | 'RT_ONLY';
+type UnderscoreMode = 'OFF' | 'RT_PROGRESSIVE' | 'ALL' | 'PS_ONLY' | 'RT_ONLY';
 
 export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
   const [underscoreMode, setUnderscoreMode] = useState<UnderscoreMode>('OFF');
@@ -20,10 +20,15 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
   const [showLicTooltip, setShowLicTooltip] = useState(false);
   const licTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cycle through modes: OFF -> ALL -> PS_ONLY -> RT_ONLY -> OFF
+  // State for PTYN Flag Tooltip
+  const [showPtynTooltip, setShowPtynTooltip] = useState(false);
+
+  // Cycle through modes according to user request: 
+  // OFF -> RT_PROGRESSIVE -> ALL -> PS_ONLY -> RT_ONLY -> OFF
   const cycleMode = () => {
     setUnderscoreMode(prev => {
-      if (prev === 'OFF') return 'ALL';
+      if (prev === 'OFF') return 'RT_PROGRESSIVE';
+      if (prev === 'RT_PROGRESSIVE') return 'ALL';
       if (prev === 'ALL') return 'PS_ONLY';
       if (prev === 'PS_ONLY') return 'RT_ONLY';
       return 'OFF';
@@ -32,10 +37,11 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
 
   const getModeLabel = () => {
     switch (underscoreMode) {
-      case 'ALL': return 'Underscores ON';
-      case 'PS_ONLY': return 'Underscores on PS only';
-      case 'RT_ONLY': return 'Underscores on RT only';
-      default: return 'Underscores OFF';
+      case 'RT_PROGRESSIVE': return 'PROGRESSIVE UNDERSCORES ON RT';
+      case 'ALL': return 'UNDERSCORES ON PS & RT';
+      case 'PS_ONLY': return 'UNDERSCORES ON PS ONLY';
+      case 'RT_ONLY': return 'UNDERSCORES ON RT ONLY';
+      default: return 'UNDERSCORES OFF';
     }
   };
 
@@ -45,16 +51,18 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
     if (underscoreMode === 'OFF') return false;
     if (underscoreMode === 'PS_ONLY') return type === 'ps' || type === 'lps';
     if (underscoreMode === 'RT_ONLY') return type === 'rt';
+    if (underscoreMode === 'RT_PROGRESSIVE') return false; // Handled specially
     return false;
   };
 
-  const RenderEnhancedText = ({ text, type }: { text: string, type: 'rt' | 'lps' | 'ps' | 'ptyn' }) => {
+  const RenderEnhancedText = ({ text, type, mask }: { text: string, type: 'rt' | 'lps' | 'ps' | 'ptyn', mask?: boolean[] }) => {
       const rawMode = isRaw(type);
+      const progressiveMode = (underscoreMode === 'RT_PROGRESSIVE' && type === 'rt');
       
       // Handle "Empty" states logic first
       if (!text || text.length === 0) {
-          if (type === 'rt' && rawMode) return <>{Array(64).fill('_').join('')}</>;
-          if (type === 'lps' && rawMode) return <>{Array(32).fill('_').join('')}</>; // Updated to 32
+          if (type === 'rt' && (rawMode || progressiveMode)) return <>{Array(64).fill('_').join('')}</>;
+          if (type === 'lps' && rawMode) return <>{Array(32).fill('_').join('')}</>;
           if (type === 'ps') return <>{Array(8).fill(' ').map((_,i)=><span key={i}>&nbsp;</span>)}</>;
           // For RT, return empty grid structure if empty, to maintain height
           if (type === 'rt') return <>{Array(64).fill(' ').map((_,i)=><span key={i}> </span>)}</>;
@@ -92,7 +100,15 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
                  );
              }
              
-             // Underscore Mode Logic
+             // Progressive Logic (priority): Show underscore only if NOT decoded
+             if (progressiveMode) {
+                 if (mask && !mask[index]) {
+                     return <span key={index}>_</span>;
+                 }
+                 return <span key={index}>{char}</span>;
+             }
+             
+             // Standard Raw Logic: Show underscore for any space
              if (rawMode && char === ' ') {
                  return <span key={index}>_</span>;
              }
@@ -271,7 +287,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
              {/* Selection Border: Active if flag is A AND has content */}
              {!data.textAbFlag && hasRtA && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
              <span className="font-mono text-lg md:text-2xl text-slate-200 whitespace-pre leading-tight shrink-0">
-               <RenderEnhancedText text={data.rtA} type="rt" />
+               <RenderEnhancedText text={data.rtA} type="rt" mask={data.rtAMask} />
              </span>
           </div>
         </div>
@@ -287,7 +303,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
              {/* Selection Border: Active if flag is B AND has content */}
              {data.textAbFlag && hasRtB && <div className="absolute inset-0 border border-blue-500/30 rounded pointer-events-none"></div>}
              <span className="font-mono text-lg md:text-2xl text-slate-200 whitespace-pre shrink-0">
-               <RenderEnhancedText text={data.rtB} type="rt" />
+               <RenderEnhancedText text={data.rtB} type="rt" mask={data.rtBMask} />
              </span>
           </div>
         </div>
@@ -315,12 +331,22 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
              </span>
           </div>
 
-          {/* PTYN - Center */}
-          <div className="flex-[0.4] md:flex-[0.5] flex items-center space-x-3 bg-slate-900/40 rounded p-2 border border-slate-800/50 overflow-x-auto no-scrollbar">
+          {/* PTYN - Center - Note: removed overflow-x-auto to allow tooltip visibility */}
+          <div 
+             className="flex-[0.4] md:flex-[0.5] flex items-center space-x-3 bg-slate-900/40 rounded p-2 border border-slate-800/50 no-scrollbar relative cursor-default group/ptyn"
+             onMouseEnter={() => setShowPtynTooltip(true)}
+             onMouseLeave={() => setShowPtynTooltip(false)}
+          >
              <span className="text-[10px] font-bold text-slate-500 uppercase px-1 shrink-0">PTYN</span>
              <span className="font-mono text-lg text-white tracking-wide whitespace-pre shrink-0">
                 {(hasPtyn) ? <RenderEnhancedText text={data.ptyn} type="ptyn" /> : <span className="text-slate-600 italic text-sm">No Data</span>}
              </span>
+             {showPtynTooltip && hasPtyn && (
+               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2 bg-slate-800 text-white text-sm font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                  Flag: {data.ptynAbFlag ? 'B' : 'A'}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+               </div>
+             )}
           </div>
         </div>
 

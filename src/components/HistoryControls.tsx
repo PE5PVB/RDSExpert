@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED, PsHistoryItem, RtHistoryItem } from '../types';
 
@@ -125,11 +126,11 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
     });
     content += `\n`;
 
-    // 9. PS and PTY History
-    content += `[9] PS / PTY HISTORY\n`;
-    content += `--------------------\n`;
+    // 9. PS, PTY and PTYN History
+    content += `[9] PS / PTY / PTYN HISTORY\n`;
+    content += `--------------------------\n`;
     [...data.psHistory].reverse().forEach(h => {
-        content += `  [${h.time}] ${h.ps.replace(/ /g, '_')} (PTY: ${ptyList[h.pty] || h.pty})\n`;
+        content += `  [${h.time}] PS: ${h.ps.replace(/ /g, '_')} | PTY: ${ptyList[h.pty] || h.pty} | PTYN: ${h.ptyn.trim() ? h.ptyn : "N/A"}\n`;
     });
 
     return content;
@@ -172,16 +173,22 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
         {/* Modal: PS History using Generic Viewer */}
         {showPsHistory && (
             <HistoryViewer 
-                title="PS / PTY HISTORY (LIMITED TO 200 ENTRIES)"
+                title="PS / PTY / PTYN HISTORY (LIMITED TO 200 ENTRIES)"
                 onClose={() => setShowPsHistory(false)}
                 data={data.psHistory}
-                getCopyText={(item: PsHistoryItem, u: boolean) => `[${item.time}] ${u ? item.ps.replace(/ /g, '_') : item.ps}`}
-                /* Removed duplicate attribute from line 186 to fix JSX error */
+                getCopyText={(item: PsHistoryItem, u: boolean) => `[${item.time}] PS: ${u ? item.ps.replace(/ /g, '_') : item.ps} | PTY: ${ptyList[item.pty] || item.pty} | PTYN: ${item.ptyn}`}
+                fullCopyFormatter={(items: PsHistoryItem[], u: boolean) => {
+                    const psLines = items.map(item => `[${item.time}] ${u ? item.ps.replace(/ /g, '_') : item.ps}`).join('\n');
+                    const ptyLines = items.map(item => `[${item.time}] ${ptyList[item.pty] || item.pty}`).join('\n');
+                    const ptynLines = items.map(item => `[${item.time}] ${item.ptyn.trim() ? item.ptyn : "N/A"}`).join('\n');
+                    return `--- PS History ---\n${psLines}\n\n--- PTY History ---\n${ptyLines}\n\n--- PTYN History ---\n${ptynLines}`;
+                }}
                 renderHeader={() => (
-                    <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+                    <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10 text-[10px] uppercase">
                         <th className="p-3 w-24">Time</th>
                         <th className="p-3 w-32">PS</th>
-                        <th className="p-3">PTY</th>
+                        <th className="p-3 w-72">PTY</th>
+                        <th className="p-3">PTYN</th>
                     </tr>
                 )}
                 renderRow={(item: PsHistoryItem, i, u: boolean) => (
@@ -190,12 +197,15 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data }) => {
                         <td className="p-3 border-r border-slate-800/50">
                             <span className="text-white font-bold tracking-widest whitespace-pre bg-slate-800 px-2 py-1 rounded shadow-sm">{u ? item.ps.replace(/ /g, '_') : item.ps}</span>
                         </td>
-                        <td className="p-3 text-slate-400">
-                            {ptyList[item.pty] || "Unknown"} <span className="text-xs opacity-50 ml-1">[{item.pty}]</span>
+                        <td className="p-3 text-slate-400 border-r border-slate-800/50">
+                            <span className="text-xs">{ptyList[item.pty] || "Unknown"} <span className="opacity-50">[{item.pty}]</span></span>
+                        </td>
+                        <td className="p-3 text-slate-300">
+                             {item.ptyn.trim() ? item.ptyn : <span className="opacity-30">---</span>}
                         </td>
                     </tr>
                 )}
-                emptyMessage="No PS / PTY data recorded for now."
+                emptyMessage="No PS / PTY / PTYN data recorded for now."
                 copyReverse={true}
                 allowUnderscoreToggle={true}
             />
@@ -246,12 +256,13 @@ interface HistoryViewerProps<T> {
     renderHeader: () => React.ReactNode;
     renderRow: (item: T, index: number, useUnderscores: boolean) => React.ReactNode;
     getCopyText: (item: T, useUnderscores: boolean) => string;
+    fullCopyFormatter?: (items: T[], useUnderscores: boolean) => string;
     emptyMessage: string;
     copyReverse?: boolean;
     allowUnderscoreToggle?: boolean;
 }
 
-const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, emptyMessage, copyReverse, allowUnderscoreToggle }: HistoryViewerProps<T>) => {
+const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, fullCopyFormatter, emptyMessage, copyReverse, allowUnderscoreToggle }: HistoryViewerProps<T>) => {
     const [paused, setPaused] = useState(false);
     const [frozenData, setFrozenData] = useState<T[]>([]);
     const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
@@ -273,7 +284,14 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
         if (copyReverse) {
             itemsToCopy.reverse();
         }
-        const text = itemsToCopy.map(item => getCopyText(item, useUnderscores)).join('\n');
+
+        let text = "";
+        if (fullCopyFormatter) {
+            text = fullCopyFormatter(itemsToCopy, useUnderscores);
+        } else {
+            text = itemsToCopy.map(item => getCopyText(item, useUnderscores)).join('\n');
+        }
+
         navigator.clipboard.writeText(text).then(() => {
             setCopyStatus('COPIED');
             setTimeout(() => setCopyStatus('IDLE'), 2000);
@@ -363,7 +381,7 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
 const HistoryModal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-3 border-b border-slate-800 bg-slate-900">
                     <div className="flex items-center">
                         <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">

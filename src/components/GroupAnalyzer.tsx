@@ -107,6 +107,19 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "15B": "Fast Basic Tuning"
 };
 
+const DAB_CHANNELS: Record<string, string> = {
+    "174.928": "5A", "176.640": "5B", "178.352": "5C", "180.064": "5D",
+    "181.936": "6A", "183.648": "6B", "185.360": "6C", "187.072": "6D",
+    "188.928": "7A", "190.640": "7B", "192.352": "7C", "194.064": "7D",
+    "195.936": "8A", "197.648": "8B", "199.360": "8C", "201.072": "8D",
+    "202.928": "9A", "204.640": "9B", "206.352": "9C", "208.064": "9D",
+    "209.936": "10A", "211.648": "10B", "213.360": "10C", "215.072": "10D",
+    "216.928": "11A", "218.640": "11B", "220.352": "11C", "222.064": "11D",
+    "223.936": "12A", "225.648": "12B", "227.360": "12C", "229.072": "12D",
+    "230.784": "13A", "232.496": "13B", "234.208": "13C", "235.776": "13D",
+    "237.488": "13E", "239.200": "13F"
+};
+
 const getGroupColor = (grp: string) => GROUP_COLORS[grp] || GROUP_COLORS["default"];
 
 // Generate list of all possible RDS groups (0A-15B)
@@ -203,6 +216,8 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
 
   // ODA Detection State
   const [odaLogs, setOdaLogs] = useState<string[]>([]);
+  const dabTargetGroupRef = useRef<string | null>(null);
+  const dabInfoRef = useRef<string>("");
 
   // Unique ID generator for log items
   const logIdCounter = useRef<number>(0);
@@ -244,8 +259,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
       if (data.recentGroups.length > 0) {
           data.recentGroups.forEach(grp => {
               if (grp.type === '3A') {
-                  const b4 = grp.blocks[3];
-                  const aidHex = b4.toString(16).toUpperCase().padStart(4, '0');
+                  const aidHex = grp.blocks[3].toString(16).toUpperCase().padStart(4, '0');
                   
                   // Decode Target Group from Block 2 (bits 4-0)
                   const appGroupCode = grp.blocks[1] & 0x1F;
@@ -254,13 +268,54 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                   const targetGroup = `${groupNum}${groupVer}`;
                   
                   const odaName = ODA_MAP[aidHex] || "Unknown ODA";
+
+                  if (aidHex === '0093') {
+                      dabTargetGroupRef.current = targetGroup;
+                  }
                   
-                  const logLine = `ODA detected (3A): ${odaName} [${aidHex}] on Group ${targetGroup}`;
+                  let logLine = `ODA detected (3A): ${odaName} [${aidHex}] on Group ${targetGroup}`;
+                  
+                  // If info is already available for DAB ODA, format line according to user request
+                  if (aidHex === '0093' && dabInfoRef.current) {
+                      logLine = `ODA detected (3A): ${odaName} [${aidHex}]${dabInfoRef.current}`;
+                  }
 
                   setOdaLogs(prev => {
+                      if (aidHex === '0093') {
+                          const existingIdx = prev.findIndex(l => l.includes('DAB Cross-Referencing [0093]'));
+                          if (existingIdx !== -1) {
+                              if (prev[existingIdx] === logLine) return prev;
+                              const next = [...prev];
+                              next[existingIdx] = logLine;
+                              return next;
+                          }
+                      }
                       if (prev.includes(logLine)) return prev;
                       return [logLine, ...prev].slice(0, 5);
                   });
+              }
+
+              // Process data packets for DAB ODA if the target group is known
+              if (dabTargetGroupRef.current && grp.type === dabTargetGroupRef.current) {
+                  const eid = grp.blocks[3].toString(16).toUpperCase().padStart(4, '0');
+                  const freqK = grp.blocks[2] * 16;
+                  const freqM = (freqK / 1000).toFixed(3);
+                  const channel = DAB_CHANNELS[freqM] || "??";
+                  
+                  const newInfo = ` -> EID = ${eid} / Channel = ${channel} (${freqM} MHz)`;
+                  if (dabInfoRef.current !== newInfo) {
+                      dabInfoRef.current = newInfo;
+                      // Refresh logs to show new data
+                      setOdaLogs(prev => {
+                          const idx = prev.findIndex(l => l.includes('DAB Cross-Referencing [0093]'));
+                          if (idx !== -1) {
+                              const next = [...prev];
+                              next[idx] = `ODA detected (3A): DAB Cross-Referencing [0093]${newInfo}`;
+                              return next;
+                          }
+                          return prev;
+                      });
+                  }
               }
           });
       }
@@ -373,12 +428,16 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
           setDetailLogs([]);
           setIsPaused(false);
           setFrozenSequence([]);
+          dabTargetGroupRef.current = null;
+          dabInfoRef.current = "";
       }
   }, [data.groupTotal]);
 
   // Explicitly reset ODA logs when PI changes (station change)
   useEffect(() => {
       setOdaLogs([]);
+      dabTargetGroupRef.current = null;
+      dabInfoRef.current = "";
   }, [data.pi]);
 
   // Determine what to display for Stream View
