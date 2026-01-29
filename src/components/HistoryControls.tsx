@@ -309,7 +309,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     const nowObj = new Date();
     const now = `${nowObj.toLocaleDateString('fr-FR')} at ${nowObj.toLocaleTimeString('fr-FR')}`;
     const srv = overrideServerName !== undefined ? overrideServerName : serverName;
-    let content = `RDSExpert - BANDSCAN REPORT\n`;
+    let content = `RDSExpert - Detailed Bandscan\n`;
     if (srv) content += `Server: ${srv}\n`;
     content += `Generated on: ${now}\n`;
     content += `==================================================\n\n`;
