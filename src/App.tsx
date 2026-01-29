@@ -1361,7 +1361,7 @@ const App: React.FC = () => {
         }
       }
       if (((g4 >> 11) & 0x1F) !== 0) {
-        state.pin = `${(g4 >> 11) & 0x1F}. ${pad((g4 >> 6) & 0x1F)}:${pad(g3 & 0x3F)}`;
+        state.pin = `${(g4 >> 11) & 0x1F}. ${pad((g4 >> 6) & 0x1F)}:${pad(g4 & 0x3F)}`;
       }
     } else if (groupTypeVal === 4 || groupTypeVal === 5) {
       const textAbFlag = !!((g2 >> 4) & 0x01); 
