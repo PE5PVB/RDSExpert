@@ -77,6 +77,7 @@ export interface BandscanEntry {
     hasRtPlus?: boolean;
     hasEon?: boolean;
     hasTmc?: boolean;
+    isDynamic?: boolean;
 }
 
 export interface LogEntry {
