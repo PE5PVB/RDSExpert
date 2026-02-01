@@ -116,8 +116,10 @@ interface DecoderState {
   // Stability Check for PS History
   psCandidateString: string;
   psStableSince: number;
+  psValidationBuffer: string;
   ptynCandidateString: string;
   ptynStableSince: number;
+  ptynValidationBuffer: string;
   
   psHistoryBuffer: PsHistoryItem[];
   rtHistoryBuffer: RtHistoryItem[];
@@ -520,15 +522,14 @@ const App: React.FC = () => {
     tp: false,
     ta: false,
     ms: false,
-    diStereo: false, 
+    diStereo: false,
     diArtificialHead: false,
     diCompressed: false,
     diDynamicPty: false,
     abFlag: false,
     rtPlusOdaGroup: null,
     rtPlusTags: new Map(), 
-    /* DO add comment above each fix. */
-    /* Fix: Replaced semicolons with commas in object literal to prevent syntax errors. */
+    /* Fix: Corrected syntax by replacing types with initial values in decoderState object literal. */
     rtPlusItemRunning: false,
     rtPlusItemToggle: false,
     hasOda: false,
@@ -553,20 +554,24 @@ const App: React.FC = () => {
     groupSequence: [],
     
     graceCounter: GRACE_PERIOD_PACKETS,
+    /* Fix: Corrected syntax by replacing 'boolean' type name with value 'false'. */
     isDirty: false,
     
     // Raw Buffer for Hex Viewer
     rawGroupBuffer: [],
 
     // History Tracking Logic
+    /* Fix: Corrected syntax by replacing type names with initial values. */
     piEstablishmentTime: 0, 
     psHistoryLogged: false, 
     
     // Stability Check for PS History
     psCandidateString: "        ",
     psStableSince: 0,
+    psValidationBuffer: "        ",
     ptynCandidateString: "        ",
     ptynStableSince: 0,
+    ptynValidationBuffer: "        ",
     
     psHistoryBuffer: [],
     rtHistoryBuffer: [],
@@ -596,7 +601,8 @@ const App: React.FC = () => {
     
     const ptyList = PTY_COMBINED;
     const ptyName = ptyList[state.pty] || `Unknown (${state.pty})`;
-    const psFormatted = renderRdsBuffer(state.psBuffer).replace(/ /g, '_');
+    const psHistoryValues = state.psHistoryBuffer.slice(0, 14).reverse().map(h => h.ps.replace(/ /g, '_'));
+    const psFormatted = psHistoryValues.length > 0 ? psHistoryValues.join(' / ') : renderRdsBuffer(state.psBuffer).replace(/ /g, '_');
     
     // Frequency formatting helper (consistent with HistoryControls)
     const fmtFreq = (fStr: string) => {
@@ -811,8 +817,7 @@ const App: React.FC = () => {
             const currentPtyn = h.ptyn;
             if (currentPtyn !== lastPtynValue) {
                 content += `[${h.time}] ${currentPtyn}\n`;
-                /* DO add comment above each fix. */
-                /* Fix: Corrected variable name from 'lastPtyn' to 'lastPtynValue' to resolve 'cannot find name' error. */
+                /* Fix: Corrected variable name from 'lastPtyn' to 'lastPtynValue'. */
                 lastPtynValue = currentPtyn;
             }
         });
@@ -831,13 +836,19 @@ const App: React.FC = () => {
 
     const rdsText = generateReportForBandscanSnapshot(state);
 
+    // Logic for dynamic PS detection and selection of the first valid PS
+    const history = state.psHistoryBuffer;
+    const firstPsDecoded = history.length > 0 ? history[history.length - 1].ps : renderRdsBuffer(state.psBuffer);
+    const isDynamic = history.length > 1;
+
     const entry: BandscanEntry = {
         freq: lastApiDataRef.current?.freq || "??.?",
         signal: lastApiDataRef.current?.sig || 0,
         stationName: lastApiDataRef.current?.tx || psRaw || "Unknown",
         city: lastApiDataRef.current?.city || "Unknown",
         pi: state.currentPi,
-        ps: renderRdsBuffer(state.psBuffer),
+        ps: firstPsDecoded,
+        isDynamic: isDynamic,
         rdsReport: rdsText,
         ta: state.ta,
         tp: state.tp,
@@ -855,7 +866,7 @@ const App: React.FC = () => {
     // Note: Do not clear lastApiDataRef here to allow final report generator access if needed
   };
 
-  const fetchBandscanMetadata = async () => {
+  const fetchBandscanMetadata = async (retryCount = 0) => {
     if (!serverUrl || !decoderState.current.isRecording) return;
     try {
       let inputUrl = serverUrl.trim();
@@ -870,15 +881,23 @@ const App: React.FC = () => {
       const response = await fetch(proxyUrl);
       if (response.ok) {
         const json = await response.json();
+        const txValue = json.txInfo?.tx || "";
+        
         lastApiDataRef.current = {
             freq: json.freq,
             sig: json.sig,
-            tx: json.txInfo?.tx || json.ps || "Unknown",
+            tx: txValue || json.ps || "Unknown",
             city: json.txInfo?.city || "Unknown",
             dist: json.txInfo?.dist,
             erp: json.txInfo?.erp,
             st: json.st
         };
+
+        // --- Logic retry if TX is empty (Max 9 retries every 5 seconds) ---
+        if (decoderState.current.isRecording && !txValue && retryCount < 9) {
+            if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
+            apiTimeoutRef.current = setTimeout(() => fetchBandscanMetadata(retryCount + 1), 5000);
+        }
       }
     } catch(e) {
       // Fail silently
@@ -998,8 +1017,10 @@ const App: React.FC = () => {
     state.rtHistoryBuffer = [];
     state.psCandidateString = "        ";
     state.psStableSince = 0;
+    state.psValidationBuffer = "        ";
     state.ptynCandidateString = "        ";
     state.ptynStableSince = 0;
+    state.ptynValidationBuffer = "        ";
 
     berHistoryRef.current = [];
     state.graceCounter = GRACE_PERIOD_PACKETS;
@@ -1086,11 +1107,19 @@ const App: React.FC = () => {
         state.rtHistoryBuffer = [];
         state.psCandidateString = "        ";
         state.psStableSince = 0;
+        state.psValidationBuffer = "        ";
         state.ptynCandidateString = "        ";
         state.ptynStableSince = 0;
+        state.ptynValidationBuffer = "        ";
 
         berHistoryRef.current = [];
         state.graceCounter = GRACE_PERIOD_PACKETS;
+        
+        // --- Trigger API metadata fetch when PI changes during Bandscan recording ---
+        if (state.isRecording) {
+            if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
+            apiTimeoutRef.current = setTimeout(fetchBandscanMetadata, 2000);
+        }
       }
     }
 
@@ -1132,6 +1161,33 @@ const App: React.FC = () => {
       state.ms = ms;
 
       if (address === 0) {
+        /* PS History archival trigger: Synchronized on Segment 0 to capture rapid title changes.
+           We check the double validation of the PREVIOUS cycle before starting to overwrite the buffer. */
+        const currentPsForArchive = renderRdsBuffer(state.psBuffer);
+        const currentPtynForArchive = renderRdsBuffer(state.ptynBuffer);
+        const piEstablishedForArchive = state.piEstablishmentTime > 0 && (Date.now() - state.piEstablishmentTime > 1000);
+        
+        if (piEstablishedForArchive && state.currentPi !== "----") {
+            if (currentPsForArchive === state.psValidationBuffer) {
+                const last = state.psHistoryBuffer[0];
+                const hasContent = !state.psHistoryLogged ? state.psMask.every(m => m) : currentPsForArchive.trim().length > 0;
+                
+                if (hasContent && (!last || last.ps !== currentPsForArchive || last.pty !== state.pty || last.ptyn !== currentPtynForArchive)) { 
+                    state.psHistoryBuffer.unshift({ 
+                        time: new Date().toLocaleTimeString(), 
+                        pi: state.currentPi, 
+                        ps: currentPsForArchive, 
+                        pty: state.pty,
+                        ptyn: currentPtynForArchive
+                    }); 
+                    if (state.psHistoryBuffer.length > 200) state.psHistoryBuffer.pop();
+                    state.psHistoryLogged = true; 
+                }
+            } else {
+                state.psValidationBuffer = currentPsForArchive;
+                state.ptynValidationBuffer = currentPtynForArchive;
+            }
+        }
         state.diDynamicPty = !!diBit;
       }
       if (address === 1) {
@@ -1146,6 +1202,8 @@ const App: React.FC = () => {
 
       state.psBuffer[address * 2] = String.fromCharCode((g4 >> 8) & 0xFF);
       state.psBuffer[address * 2 + 1] = String.fromCharCode(g4 & 0xFF);
+      state.psMask[address * 2] = true;
+      state.psMask[address * 2 + 1] = true;
 
       if (isGroupA) {
         if (state.lastGroup0A3 !== g3) {
@@ -1490,7 +1548,7 @@ const App: React.FC = () => {
         state.lpsBuffer[idx+3] = String.fromCharCode(g4 & 0xFF);
       }
     }
-  }, []); 
+  }, [fetchBandscanMetadata]); 
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1511,22 +1569,8 @@ const App: React.FC = () => {
           state.ptynStableSince = now;
         }
         
-        if (state.piEstablishmentTime > 0 && (now - state.piEstablishmentTime > 3000) && state.currentPi !== "----" && (now - state.psStableSince) >= 1000 && (now - state.ptynStableSince) >= 1000) {
-          const last = state.psHistoryBuffer[0];
-          if (currentPs.trim().length > 0 && (!last || last.ps !== currentPs || last.pty !== state.pty || last.ptyn !== currentPtyn)) { 
-            state.psHistoryBuffer.unshift({ 
-              time: new Date().toLocaleTimeString(), 
-              pi: state.currentPi, 
-              ps: currentPs, 
-              pty: state.pty,
-              ptyn: currentPtyn
-            }); 
-            if (state.psHistoryBuffer.length > 200) {
-              state.psHistoryBuffer.pop();
-            }
-            state.psHistoryLogged = true; 
-          }
-        }
+        /* PS History handling removed from useEffect to use Segment 0 triggering in decodeRdsGroup.
+           This ensures capture of fast changes while maintaining double validation integrity. */
         
         const cRtBuf = state.abFlag ? state.rtBuffer1 : state.rtBuffer0; 
         const cRtMsk = state.abFlag ? state.rtMask1 : state.rtMask0;
@@ -1720,9 +1764,6 @@ const App: React.FC = () => {
           // Detect station change -> Archive previous one if recording
           if (decoderState.current.isRecording) {
               captureBandscanEntry();
-              // Déclencher systématiquement l'interrogation API pour la nouvelle fréquence après un délai de 2 secondes
-              if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
-              apiTimeoutRef.current = setTimeout(fetchBandscanMetadata, 2000);
           }
           resetData();
           lineBufferRef.current = "";
