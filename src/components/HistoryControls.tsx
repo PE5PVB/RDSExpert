@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED, PsHistoryItem, RtHistoryItem, BandscanEntry } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
@@ -83,7 +84,8 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     const now = `${dateStr} at ${timeStr}`;
     
     const ptyName = ptyList[data.pty] || `Unknown (${data.pty})`;
-    const psFormatted = data.ps.replace(/ /g, '_'); // Replace spaces with underscores
+    const psHistoryValues = data.psHistory.slice(0, 14).reverse().map(h => h.ps.replace(/ /g, '_'));
+    const psFormatted = psHistoryValues.length > 0 ? psHistoryValues.join(' / ') : data.ps.replace(/ /g, '_');
     
     // Get signal metadata for the TXT header
     const meta = overrideMeta || data.currentMetadata;
@@ -273,8 +275,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
             const currentPtyValue = ptyList[h.pty] || h.pty.toString();
             if (currentPtyValue !== lastPtyValue) {
                 content += `[${h.time}] ${currentPtyValue}\n`;
-                /* DO add comment above each fix. */
-                /* Fix: Corrected 'lastPty' to 'lastPtyValue' to match the declared variable name. */
+                /* Fix: Corrected variable name from 'lastPty' to 'lastPtyValue'. */
                 lastPtyValue = currentPtyValue;
             }
         });
@@ -292,8 +293,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
             const currentPtyn = h.ptyn;
             if (currentPtyn !== lastPtynValue) {
                 content += `[${h.time}] ${currentPtyn}\n`;
-                /* DO add comment above each fix. */
-                /* Fix: Ensure name consistency for lastPtynValue. */
+                /* Fix: Corrected variable name from 'lastPtyn' to 'lastPtynValue'. */
                 lastPtynValue = currentPtyn;
             }
         });
@@ -480,25 +480,24 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                     const psLines = items.map(item => `[${item.time}] ${u ? item.ps.replace(/ /g, '_') : item.ps}`).join('\n');
                     
                     let ptyLines = "";
-                    let lastPty = "";
+                    let lastPtyValueLocal = "";
                     items.forEach(item => {
                         const currentPty = ptyList[item.pty] || item.pty.toString();
-                        if (currentPty !== lastPty) {
+                        if (currentPty !== lastPtyValueLocal) {
                             ptyLines += `[${item.time}] ${currentPty}\n`;
-                            lastPty = currentPty;
+                            lastPtyValueLocal = currentPty;
                         }
                     });
 
                     const ptynEntries = items.filter(h => h.ptyn && h.ptyn.trim().length > 0);
                     let ptynLines = "";
-                    let lastPtyn = "";
+                    let lastPtynValueLocal = "";
                     ptynEntries.forEach(item => {
                         const currentPtyn = item.ptyn;
-                        if (currentPtyn !== lastPtyn) {
+                        if (currentPtyn !== lastPtynValueLocal) {
                             ptynLines += `[${item.time}] ${currentPtyn}\n`;
-                            /* DO add comment above each fix. */
-                            /* Fix: Corrected variable name to 'lastPtyn' to match the declaration in this scope. */
-                            lastPtyn = currentPtyn;
+                            /* Fix: Corrected variable name. */
+                            lastPtynValueLocal = currentPtyn;
                         }
                     });
 
@@ -703,8 +702,7 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
     );
 
     return (
-        /* DO add comment above each fix. */
-        /* Fix: Use HistoryModal instead of HistoryViewer recursively to fix the property 'children' error. */
+        /* Fix: Use HistoryModal instead of HistoryViewer recursively to avoid stack overflow. */
         <HistoryModal title={title} onClose={onClose} actions={actions}>
             <table className="w-full text-left text-sm font-mono">
                 <thead>
@@ -754,8 +752,9 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
     // States for optional history inclusion (disabled by default)
     const [includeRtHistory, setIncludeRtHistory] = useState(false);
     const [includePsHistory, setIncludePsHistory] = useState(false);
+    const [signalUnit, setSignalUnit] = useState<'dBf' | 'dBuV'>('dBf');
 
-    // Filter report content based on checkboxes with improved global regex
+    // Filter report content based on checkboxes and unit preference
     const getFilteredReport = (rawContent: string) => {
         let filtered = rawContent;
         if (!includeRtHistory) {
@@ -764,10 +763,19 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
         if (!includePsHistory) {
             filtered = filtered.replace(/\[10\] PS \/ PTY \/ PTYN HISTORY[\s\S]*?(?=={20,}|$)/g, "");
         }
+        
+        // Signal Unit Conversion Logic (Reference: 67.1 dBf = 55.9 dBuV -> Formula: dBuV = dBf - 11.2)
+        if (signalUnit === 'dBuV') {
+            filtered = filtered.replace(/(\d+\.\d+|\d+)\s+dBf/g, (match, p1) => {
+                const converted = (parseFloat(p1) - 11.2).toFixed(1);
+                return `${converted} dBuV`;
+            });
+        }
+        
         return filtered.trim();
     };
 
-    const displayContent = useMemo(() => getFilteredReport(content), [content, includeRtHistory, includePsHistory]);
+    const displayContent = useMemo(() => getFilteredReport(content), [content, includeRtHistory, includePsHistory, signalUnit]);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(displayContent).then(() => {
@@ -953,15 +961,20 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 
                 // PI
                 doc.setFont("helvetica", "normal");
-                doc.setFontSize(10); // Correction taille de police
+                doc.setFontSize(10); 
                 doc.setTextColor(100, 116, 139); // Slate 500
                 doc.text(entry.pi, 38, yPos);
                 
                 // PS
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(10); // Correction taille de police
-                doc.setTextColor(15, 23, 42); // Slate 900
+                doc.setFontSize(10); 
+                if (entry.isDynamic) {
+                    doc.setTextColor(126, 34, 206); // Violet (Purple 700)
+                } else {
+                    doc.setTextColor(15, 23, 42); // Slate 900
+                }
                 doc.text(psFormatted, 55, yPos);
+                doc.setTextColor(15, 23, 42); // Reset color to default Slate 900
 
                 // Column MOD. at 84 (Stereo Icon)
                 if (entry.modulation === "Stereo") {
@@ -1008,10 +1021,13 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
 
                 // Signal Block (Value above, Gauge below)
                 const sig = entry.signal;
+                const displaySigVal = signalUnit === 'dBuV' ? (sig - 11.2).toFixed(1) : sig.toFixed(1);
+                const displayUnit = signalUnit === 'dBuV' ? 'dBuV' : 'dBf';
+                
                 doc.setFontSize(7);
                 doc.setTextColor(71, 85, 105);
                 doc.setFont("helvetica", "normal");
-                doc.text(`${sig.toFixed(1)} dBf`, 100, yPos - 1.5);
+                doc.text(`${displaySigVal} ${displayUnit}`, 100, yPos - 1.5);
 
                 // Mini Gauge below value
                 doc.setFillColor(226, 232, 240); // Slate 200
@@ -1092,6 +1108,9 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             
             // Indicateur de signal visuel
             const sig = entry.signal;
+            const displaySigValDetail = signalUnit === 'dBuV' ? (sig - 11.2).toFixed(1) : sig.toFixed(1);
+            const displayUnitDetail = signalUnit === 'dBuV' ? 'dBuV' : 'dBf';
+            
             doc.setFillColor(226, 232, 240); // Ardoise 200
             doc.rect(140, 25, 50, 4, 'F');
             
@@ -1108,25 +1127,25 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             doc.rect(140, 25, visualWidth, 4, 'F');
             doc.setFontSize(7);
             doc.setTextColor(100, 116, 139);
-            doc.text(`SIGNAL: ${sig.toFixed(1)} dBf`, 140, 23);
+            doc.text(`SIGNAL: ${displaySigValDetail} ${displayUnitDetail}`, 140, 23);
 
             // --- RDS Services Badges on Detail Page ---
-            const badges = [];
-            if (entry.hasOda) badges.push({ label: "ODA", color: [168, 85, 247] });
-            if (entry.hasRtPlus) badges.push({ label: "RT+", color: [34, 197, 94] });
-            if (entry.hasEon) badges.push({ label: "EON", color: [234, 179, 8] });
-            if (entry.hasTmc) badges.push({ label: "TMC", color: [239, 68, 68] });
+            const badgesDetail = [];
+            if (entry.hasOda) badgesDetail.push({ label: "ODA", color: [168, 85, 247] });
+            if (entry.hasRtPlus) badgesDetail.push({ label: "RT+", color: [34, 197, 94] });
+            if (entry.hasEon) badgesDetail.push({ label: "EON", color: [234, 179, 8] });
+            if (entry.hasTmc) badgesDetail.push({ label: "TMC", color: [239, 68, 68] });
 
-            if (badges.length > 0) {
+            if (badgesDetail.length > 0) {
                 const bW = 10;
                 const bH = 4;
                 const bG = 1.5;
-                const totalW = (badges.length * bW) + ((badges.length - 1) * bG);
+                const totalW = (badgesDetail.length * bW) + ((badgesDetail.length - 1) * bG);
                 const gCenter = 140 + 25;
                 let bX = gCenter - (totalW / 2);
                 const bY = 33.5; 
 
-                badges.forEach(b => {
+                badgesDetail.forEach(b => {
                     doc.setFillColor(b.color[0], b.color[1], b.color[2]);
                     // @ts-ignore
                     doc.roundedRect(bX, bY, bW, bH, 0.5, 0.5, 'F');
@@ -1142,8 +1161,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             if (isBandscan) {
                 doc.setTextColor(37, 99, 235);
                 doc.setFontSize(7);
-                /* DO add comment above each fix. */
-                // Fix: Force normal font to prevent bold inheritance for the return link
                 doc.setFont("helvetica", "normal");
                 const returnLabel = "Return to the summary ^";
                 const labelWidth = doc.getTextWidth(returnLabel);
@@ -1166,8 +1183,8 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             
             // --- Content Rendering ---
             let detailY = 62;
-            let historyPageStarted = false; // Flag reset for each station loop
-            const sourceReport = entry.rdsReport || displayContent;
+            let historyPageStarted = false; 
+            const sourceReport = entry.rdsReport || content;
             const filteredEntryReport = getFilteredReport(sourceReport);
             const sections = filteredEntryReport.split(/\n\s*\n/).filter(s => !s.includes('MHz >') && !s.includes('Generated on:') && !s.includes('km -') && !s.includes('Modulation:') && !s.includes('Signal strength:')); 
             
@@ -1179,7 +1196,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 if (lines[0].startsWith('[')) {
                     sectionTitle = lines[0];
                     
-                    // Logic to isolate BOTH history sections [9] and [10] on the SAME dedicated block of pages
                     const isHistorySection = sectionTitle.includes('[9]') || sectionTitle.includes('[10]');
                     if (isHistorySection && !historyPageStarted) {
                         doc.addPage();
@@ -1211,8 +1227,25 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                     if (colonIdx !== -1 && !isHistoryLine && !isBulletLine && !isNoFormatSection) {
                         const label = line.substring(0, colonIdx + 1);
                         const valueRaw = line.substring(colonIdx + 1);
-                        const value = sectionTitle.includes('[3]') ? valueRaw.substring(2) : valueRaw.trim();
+                        /* Fix: Adjusted to allow reassignment for dynamic PS sequence logic. */
+                        let value = sectionTitle.includes('[3]') ? valueRaw.substring(2) : valueRaw.trim();
                         
+                        // --- DYNAMIC PS SEQUENCE LOGIC (PDF DETAILED PAGES ONLY) ---
+                        if (label === "PS:" && sectionTitle.includes("[1]")) {
+                            const historyMatch = sourceReport.match(/• PS History •\n([\s\S]*?)(?=\n\n|•|$)/);
+                            if (historyMatch) {
+                                const psLines = historyMatch[1].trim().split('\n');
+                                const psValues = psLines.map(l => {
+                                    const m = l.match(/\]\s+(.*)/);
+                                    return m ? m[1] : null;
+                                }).filter(v => v !== null) as string[];
+                                
+                                if (psValues.length > 1) {
+                                    value = psValues.slice(-14).join(' / ');
+                                }
+                            }
+                        }
+
                         doc.setFont("helvetica", "bold");
                         doc.setTextColor(71, 85, 105); 
                         doc.text(label, 15, detailY);
@@ -1222,7 +1255,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                         const valueX = 45; 
                         const maxWidth = 195 - valueX;
 
-                        // Special logic for Section [2] (Flags/DI) styling
                         if (sectionTitle.includes('[2]')) {
                             const parts = value.split(' | ');
                             let currentX = valueX;
@@ -1234,10 +1266,10 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                                 
                                 if (isTA1) {
                                     doc.setFont("helvetica", "bold");
-                                    doc.setTextColor(220, 38, 38); // Rouge clair
+                                    doc.setTextColor(220, 38, 38); 
                                 } else if (isTP1) {
                                     doc.setFont("helvetica", "bold");
-                                    doc.setTextColor(22, 163, 74); // Vert clair
+                                    doc.setTextColor(22, 163, 74); 
                                 } else if (isOne) {
                                     doc.setFont("helvetica", "bold");
                                     doc.setTextColor(0, 0, 0);
@@ -1258,7 +1290,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                                 }
                             });
                         } else if (sectionTitle.includes('[3]')) {
-                            // For Section [3] (Radiotext), use text() directly to preserve leading spaces exactly.
                             doc.text(value, valueX, detailY);
                         } else {
                             const wrappedValue = doc.splitTextToSize(value, maxWidth);
@@ -1290,7 +1321,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                         });
                     }
                     detailY += 5;
-                    // FIX: Ensure new page is only created if there are remaining lines or sections to write.
                     if (detailY > 280 && (lIdx < lines.length - 1 || sIdx < sections.length - 1)) {
                         doc.addPage();
                         detailY = 20;
@@ -1330,8 +1360,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 doc.setPage(stationStartPages[index]);
                 doc.setTextColor(37, 99, 235);
                 doc.setFontSize(7);
-                /* DO add comment above each fix. */
-                // Fix: Force normal font for nav links to prevent inheritance issues
                 doc.setFont("helvetica", "normal");
                 
                 const spacing = 8;
@@ -1341,14 +1369,12 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 const prevWidth = doc.getTextWidth(prevLabel);
 
                 if (index < bandscanEntries.length - 1) {
-                    // Position Next at far right
                     const nextX = 195 - nextWidth;
                     doc.text(nextLabel, nextX, 16);
                     doc.link(nextX, 13, nextWidth, 5, { pageNumber: stationStartPages[index + 1] });
                 }
                 
                 if (index > 0) {
-                    // Position Previous to the left of Next (if Next exists) or at far right
                     const nextPartWidth = (index < bandscanEntries.length - 1) ? (nextWidth + spacing) : 0;
                     const prevX = 195 - nextPartWidth - prevWidth;
                     doc.text(prevLabel, prevX, 16);
@@ -1396,6 +1422,20 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                         />
                         <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300 transition-colors uppercase tracking-tight">Include PS / PTY / PTYN History</span>
                     </label>
+
+                    <div className="flex items-center gap-2 shrink-0 ml-2 border-l border-slate-800 pl-6">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Signal units:</span>
+                        <div className="flex bg-slate-950 rounded p-0.5 border border-slate-800">
+                            <button 
+                                onClick={() => setSignalUnit('dBf')}
+                                className={`px-2 py-0.5 text-[9px] font-bold rounded transition-colors ${signalUnit === 'dBf' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                            >dBf</button>
+                            <button 
+                                onClick={() => setSignalUnit('dBuV')}
+                                className={`px-2 py-0.5 text-[9px] font-bold rounded transition-colors ${signalUnit === 'dBuV' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                            >dBuV</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 p-4">
