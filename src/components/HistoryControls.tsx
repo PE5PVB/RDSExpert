@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED, PsHistoryItem, RtHistoryItem, BandscanEntry } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
@@ -192,7 +191,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     if (eonKeys.length > 0) {
         eonKeys.forEach(key => {
             const net = data.eonData[key];
-            content += `  PI: ${net.pi} | PS: ${net.ps}\n`;
+            content += `  PI: ${net.pi} | PS: ${net.ps.replace(/ /g, '_')}\n`;
             if (net.af.length > 0) {
                 content += `    AF Method A: [${net.af.join(' / ')}]\n`;
             }
@@ -210,7 +209,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     content += `--------------------------------\n`;
     if (data.odaList.length > 0) {
         data.odaList.forEach(oda => {
-            content += `  - ${oda.name} [AID: ${oda.aid}]\n`;
+            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}\n`;
         });
     } else {
         content += `  No ODA AID detected on Group 3A.\n`;
