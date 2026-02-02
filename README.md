@@ -9,6 +9,8 @@ It is also designed for RBDS (RDS variant for North America).
 <br>
 -> Otherwise, you can copy and paste the following URL: `https://lucasgallone.github.io/RDSExpert/`
 <br>
+-> You can also integrate RDSExpert directly into your webserver as a plugin! Instructions are provided below.
+<br>
 <br>
 This tool will be of particular interest to radio engineers and anyone with an interest in radio engineering. Its purpose is to allow in-depth analysis of the RDS data carried by FM signals, which webservers cannot completely display for obvious usability reasons.
 <br>
@@ -29,6 +31,19 @@ Below, you will find a list of the elements that RDSExpert can decode and displa
 <br>
 <br>
 Special thanks to [@mrwish7](https://github.com/mrwish7/) for the initial implementation of WebSocket decoding, without which creating this tool would have been much more complicated. Thanks also to everyone who offers suggestions, provides feedback on the decoder's functionality, and so on.
+
+# Integrate RDSExpert into your TEF webserver as a plugin!
+If you want to use RDSExpert directly on your TEF webserver, this plugin is made for you!
+<br>
+<br>
+The integrated interface allows you to use the decoder in a compact and direct way thanks to a floating window on the server.
+<br>
+No need to open a new tab in your web browser and enter your server URL every time. Everything is automated!
+<br>
+<br>
+To download the plugin and install it on your webserver, [follow the instructions by clicking here.](https://github.com/LucasGallone/RDSExpert-Plugin)
+<br>
+Or copy-paste the following link: `https://github.com/LucasGallone/RDSExpert-Plugin`
 
 # Getting started | Help documentation
 
