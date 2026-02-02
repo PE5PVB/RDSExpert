@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED } from '../types';
 
@@ -206,7 +207,7 @@ export const InfoGrid: React.FC<InfoGridProps> = ({ data }) => {
                             >
                                 <span className="flex items-center gap-4">
                                     <span className="text-lg text-white">{eon.pi}</span>
-                                    <span className="text-slate-400 border-l border-slate-600 pl-4">{eon.ps || "        "}</span>
+                                    <span className="text-slate-400 border-l border-slate-600 pl-4">{(eon.ps || "        ").replace(/ /g, '_')}</span>
                                 </span>
                                 <span className="text-[10px] text-slate-500 uppercase tracking-wide">
                                     {isExpanded ? 'HIDE DETAILS' : 'SHOW DETAILS'}
