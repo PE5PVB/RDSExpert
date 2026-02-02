@@ -21,10 +21,11 @@ Below, you will find a list of the elements that RDSExpert can decode and displa
 <b>It is important to note that the RDS decoding is less sensitive than that used natively by TEF webservers.</b> Therefore, an "acceptable" signal is necessary for accurate decoding. While it would be technically possible to increase the decoding sensitivity, this would increase the risk of displaying erroneous data, making the tool less reliable. For DX receptions and very weak signals, it is therefore strongly recommended to use the integrated decoder of the TEF webservers.
 <br>
 <br>
-<b>Another important detail is that this tool only works with HTTPS servers.</b> This is due to a security restriction implemented by web browsers that block connections to HTTP servers from an HTTPS interface (GitHub only offers HTTPS pages nowadays).
+<b>Initially, this tool only works with HTTPS servers due to webservers restrictions.
 <br>
+Another version hosted by [@Bkram](https://github.com/bkram/) exists, and you will be linked to it if you indicate an HTTP webserver URL on the interface.</b>
 <br>
-<b>Fortunately, it's possible to bypass this limitation by using the HTTP version hosted by [@Bkram](https://github.com/bkram/).</b> Follow the on-screen instructions when you indicate an HTTP URL, and you'll be able to use the tool that way.
+Follow the on-screen instructions after indicating it, and you'll be able to use the tool that way.
 <br>
 <br>
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
