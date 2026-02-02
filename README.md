@@ -18,7 +18,7 @@ This tool will be of particular interest to radio engineers and anyone with an i
 <b>It is important to note that the RDS decoding is less sensitive than that used natively by TEF webservers.</b> Therefore, an "acceptable" signal is necessary for accurate decoding. While it would be technically possible to increase the decoding sensitivity, this would increase the risk of displaying erroneous data, making the tool less reliable. For DX receptions and very weak signals, it is therefore strongly recommended to use the integrated decoder of the TEF webservers.
 <br>
 <br>
-<b>Initially, this tool only works with HTTPS servers due to webservers restrictions.
+<b>Initially, this tool only works with HTTPS servers due to web browsers restrictions.
 <br>
 Another version hosted by [@Bkram](https://github.com/bkram/) exists, and you will be linked to it if you indicate an HTTP webserver URL on the interface.</b>
 <br>
