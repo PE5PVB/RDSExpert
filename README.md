@@ -32,4 +32,5 @@ Special thanks to [@mrwish7](https://github.com/mrwish7/) for the initial implem
 
 # Getting started | Help documentation
 
-To learn how to use RDSExpert and find out more about the various functions offered by the decoder, [go to the Wiki section by clicking here](https://github.com/LucasGallone/RDSExpert/wiki/Getting-started).
+To learn how to use RDSExpert and find out more about the various functions offered by the decoder:
+[Go to the Wiki section by clicking here.](https://github.com/LucasGallone/RDSExpert/wiki/Getting-started)
