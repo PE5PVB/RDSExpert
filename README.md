@@ -15,9 +15,6 @@ It is also designed for RBDS (RDS variant for North America).
 This tool will be of particular interest to radio engineers and anyone with an interest in radio engineering. Its purpose is to allow in-depth analysis of the RDS data carried by FM signals, which webservers cannot completely display for obvious usability reasons.
 <br>
 <br>
-Below, you will find a list of the elements that RDSExpert can decode and display, along with technical details.
-<br>
-<br>
 <b>It is important to note that the RDS decoding is less sensitive than that used natively by TEF webservers.</b> Therefore, an "acceptable" signal is necessary for accurate decoding. While it would be technically possible to increase the decoding sensitivity, this would increase the risk of displaying erroneous data, making the tool less reliable. For DX receptions and very weak signals, it is therefore strongly recommended to use the integrated decoder of the TEF webservers.
 <br>
 <br>
@@ -34,6 +31,7 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 Special thanks to [@mrwish7](https://github.com/mrwish7/) for the initial implementation of WebSocket decoding, without which creating this tool would have been much more complicated. Thanks also to everyone who offers suggestions, provides feedback on the decoder's functionality, and so on.
 
 # Integrate RDSExpert into your TEF webserver as a plugin!
+
 If you want to use RDSExpert directly on your TEF webserver, this plugin is made for you!
 <br>
 <br>
