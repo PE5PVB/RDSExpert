@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   RdsData, 
@@ -526,6 +527,7 @@ const App: React.FC = () => {
     diCompressed: false,
     diDynamicPty: false,
     abFlag: false,
+    // Fix: Initializing property with value null instead of type number | null
     rtPlusOdaGroup: null,
     rtPlusTags: new Map(), 
     /* Fix: Corrected syntax by replacing types with initial values in decoderState object literal. */
@@ -548,6 +550,7 @@ const App: React.FC = () => {
     tmcBuffer: [], 
     
     // Analyzer State
+    // Fix: Initializing property with empty object instead of type Record
     groupCounts: {},
     groupTotal: 0,
     groupSequence: [],
@@ -560,8 +563,8 @@ const App: React.FC = () => {
     rawGroupBuffer: [],
 
     // History Tracking Logic
-    /* Fix: Corrected syntax by replacing type names with initial values. */
     piEstablishmentTime: 0, 
+    // Fix: Initializing property with value false instead of type boolean
     psHistoryLogged: false, 
     
     // Stability Check for PS History
@@ -816,7 +819,6 @@ const App: React.FC = () => {
             const currentPtyn = h.ptyn;
             if (currentPtyn !== lastPtynValue) {
                 content += `[${h.time}] ${currentPtyn}\n`;
-                /* Fix: Corrected variable name from 'lastPtyn' to 'lastPtynValue'. */
                 lastPtynValue = currentPtyn;
             }
         });
@@ -1171,16 +1173,21 @@ const App: React.FC = () => {
                 const last = state.psHistoryBuffer[0];
                 const hasContent = !state.psHistoryLogged ? state.psMask.every(m => m) : currentPsForArchive.trim().length > 0;
                 
-                if (hasContent && (!last || last.ps !== currentPsForArchive || last.pty !== state.pty || last.ptyn !== currentPtynForArchive)) { 
-                    state.psHistoryBuffer.unshift({ 
-                        time: new Date().toLocaleTimeString(), 
-                        pi: state.currentPi, 
-                        ps: currentPsForArchive, 
-                        pty: state.pty,
-                        ptyn: currentPtynForArchive
-                    }); 
-                    if (state.psHistoryBuffer.length > 200) state.psHistoryBuffer.pop();
-                    state.psHistoryLogged = true; 
+                if (hasContent) {
+                    if (!last || last.ps !== currentPsForArchive || last.pty !== state.pty) { 
+                        state.psHistoryBuffer.unshift({ 
+                            time: new Date().toLocaleTimeString(), 
+                            pi: state.currentPi, 
+                            ps: currentPsForArchive, 
+                            pty: state.pty,
+                            ptyn: currentPtynForArchive
+                        }); 
+                        if (state.psHistoryBuffer.length > 200) state.psHistoryBuffer.pop();
+                        state.psHistoryLogged = true; 
+                    } else if (last.ptyn.trim() === "" && currentPtynForArchive.trim() !== "") {
+                        // Same PS/PTY but PTYN just arrived -> Update existing entry to avoid duplicates
+                        last.ptyn = currentPtynForArchive;
+                    }
                 }
             } else {
                 state.psValidationBuffer = currentPsForArchive;
