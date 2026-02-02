@@ -46,6 +46,6 @@ Or copy-paste the following link: `https://github.com/LucasGallone/RDSExpert-Plu
 
 # Getting started | Help documentation
 
-To learn how to use RDSExpert and find out more about the various functions offered by the decoder:
+Learn how to use RDSExpert and find out more about the various functions offered by the decoder:
 <br>
 [Go to the Wiki section by clicking here.](https://github.com/LucasGallone/RDSExpert/wiki/)
