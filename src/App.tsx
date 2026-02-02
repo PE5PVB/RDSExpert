@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   RdsData, 
@@ -713,7 +712,7 @@ const App: React.FC = () => {
     content += `---------------------------------\n`;
     if (state.eonMap.size > 0) {
         state.eonMap.forEach((net) => {
-            content += `  PI: ${net.pi} | PS: ${net.ps}\n`;
+            content += `  PI: ${net.pi} | PS: ${net.ps.replace(/ /g, '_')}\n`;
             if (net.af.length > 0) content += `    AF Method A: [${net.af.join(' / ')}]\n`;
             if (net.mappedFreqs.length > 0) content += `    Mapped Frequencies: [${net.mappedFreqs.join(' / ')}]\n`;
         });
@@ -726,7 +725,7 @@ const App: React.FC = () => {
     content += `--------------------------------\n`;
     if (state.odaList.length > 0) {
         state.odaList.forEach(oda => {
-            content += `  - ${oda.name} [AID: ${oda.aid}]\n`;
+            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}\n`;
         });
     } else {
         content += `  No ODA AID detected on Group 3A.\n`;
