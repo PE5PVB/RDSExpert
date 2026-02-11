@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED, PsHistoryItem, RtHistoryItem, BandscanEntry } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
 import { jsPDF } from 'jspdf';
@@ -54,6 +54,20 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
   const [waitingForFinalReport, setWaitingForFinalReport] = useState(false);
   const [singleMetadata, setSingleMetadata] = useState<BandscanEntry | null>(null);
   const [serverName, setServerName] = useState<string>('');
+  const [apiError, setApiError] = useState<string | null>(null);
+  const hasShownApiErrorRef = useRef(false);
+
+  const triggerApiError = (code: string) => {
+    if (!hasShownApiErrorRef.current) {
+      setApiError(code);
+      hasShownApiErrorRef.current = true;
+    }
+  };
+
+  useEffect(() => {
+    (window as any).showRdsApiError = triggerApiError;
+    return () => { (window as any).showRdsApiError = undefined; };
+  }, []);
 
   // Resolve PTY list using hybrid standard
   const ptyList = PTY_COMBINED;
@@ -90,7 +104,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     const meta = overrideMeta || data.currentMetadata;
     const freqStr = meta?.freq ? formatFrequency(meta.freq) : "??.?";
     const tx = meta?.stationName || data.ps.trim() || "Unknown";
-    const city = (meta?.city || "Unknown").split(' | ')[0];
+    const city = (meta?.city || "[Unknown]").split(' | ')[0];
     const dist = meta?.dist || "??";
     const power = meta?.power || "?";
     const mod = meta?.modulation || (data.stereo ? "Stereo" : "Mono");
@@ -143,13 +157,13 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     // 3. Radiotext
     content += `[3] RADIOTEXT\n`;
     content += `-------------\n`;
-    const rtAVal = (data.rtA || "").replace(/\r/g, '').trim();
-    const rtBVal = (data.rtB || "").replace(/\r/g, '').trim();
+    const rtAVal = (data.rtA || "").trim();
+    const rtBVal = (data.rtB || "").trim();
     if (!rtAVal && !rtBVal) {
         content += `No Radiotext detected.\n\n`;
     } else {
-        content += `Line A:  ${(data.rtA || "").replace(/\r/g, '')}\n`;
-        content += `Line B:  ${(data.rtB || "").replace(/\r/g, '')}\n\n`;
+        content += `Line A:  ${(data.rtA || "")}\n`;
+        content += `Line B:  ${(data.rtB || "")}\n\n`;
     }
 
     // 4. AF
@@ -191,7 +205,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     if (eonKeys.length > 0) {
         eonKeys.forEach(key => {
             const net = data.eonData[key];
-            content += `  PI: ${net.pi} | PS: ${net.ps.replace(/ /g, '_')}\n`;
+            content += `  - PI: ${net.pi} > PS: ${net.ps.replace(/ /g, '_')} (TP = ${net.tp ? '1' : '0'} | TA = ${net.ta ? '1' : '0'} | PTY: ${net.pty})\n`;
             if (net.af.length > 0) {
                 content += `    AF Method A: [${net.af.join(' / ')}]\n`;
             }
@@ -322,7 +336,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
         const ps = entry.ps.replace(/ /g, '_');
         const sig = entry.signal.toFixed(1);
         const st = entry.stationName || "Unknown";
-        const city = (entry.city || "Unknown").split(' | ')[0];
+        const city = (entry.city || "[Unknown]").split(' | ')[0];
         // Updated formatting: [Fréquence] MHz -> PI: [PI] | PS: [PS] | [dBf] -> [Station] - [Ville]
         content += `${f} MHz -> PI: ${pi} | PS: ${ps} | ${sig} dBf -> ${st} - ${city}\n`;
     });
@@ -374,9 +388,11 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                   };
                   setSingleMetadata(metaToUse);
               } else {
+                  triggerApiError(res.status.toString());
                   setSingleMetadata(null);
               }
           } catch (e) {
+              triggerApiError("Network Error");
               setSingleMetadata(null);
           }
       } else {
@@ -419,8 +435,12 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                     setServerName(json.tunerName);
                     return json.tunerName;
                 }
+            } else {
+                triggerApiError(res.status.toString());
             }
-        } catch (e) {}
+        } catch (e) {
+            triggerApiError("Network Error");
+        }
         return '';
     };
 
@@ -588,6 +608,10 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                 formatFreq={formatFrequency}
                 serverName={serverName}
             />
+        )}
+
+        {apiError && (
+            <ApiErrorModal code={apiError} onClose={() => setApiError(null)} />
         )}
     </div>
   );
@@ -771,6 +795,9 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             });
         }
         
+        // Nettoyage des retours chariots techniques (\r) pour éviter les sauts de ligne indésirables dans le textarea de l'aperçu
+        filtered = filtered.replace(/\r/g, '');
+
         return filtered.trim();
     };
 
@@ -790,7 +817,8 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
         const piSafe = pi.trim() || "XXXX";
         const filename = `RDSExpert_${piSafe}_${dateStr}_${timeStr}.txt`;
 
-        const blob = new Blob([displayContent], { type: 'text/plain' });
+        // Correction de la regex pour préserver les sauts de ligne (\n, code 0x0A) lors de l'export TXT
+        const blob = new Blob([displayContent.replace(/[\x00-\x09\x0B-\x1F]/g, '')], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -807,6 +835,32 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
         const dateStrNow = nowObj.toLocaleDateString('fr-FR');
         const timeStrNow = nowObj.toLocaleTimeString('fr-FR');
         const now = `${dateStrNow} at ${timeStrNow}`;
+
+        // Helper for technical codes drawing (grey boxes)
+        const drawTextWithCodes = (text: string, xPos: number, yPos: number, fontSize: number) => {
+            let currentX = xPos;
+            doc.setFontSize(fontSize);
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const code = char.charCodeAt(0);
+                if (code < 32) {
+                    const hex = `<${code.toString(16).toUpperCase().padStart(2, '0')}>`;
+                    doc.setFontSize(7.5); // Augmentation de la police pour les codes techniques
+                    const boxW = doc.getTextWidth(hex) + 1.2;
+                    const boxH = 3.8;
+                    doc.setFillColor(220, 220, 220);
+                    doc.rect(currentX, yPos - 3.2, boxW, boxH, 'F');
+                    doc.setTextColor(80, 80, 80);
+                    doc.text(hex, currentX + 0.6, yPos - 0.3);
+                    doc.setFontSize(fontSize);
+                    doc.setTextColor(0, 0, 0);
+                    currentX += boxW + 0.8;
+                } else {
+                    doc.text(char, currentX, yPos);
+                    currentX += doc.getTextWidth(char);
+                }
+            }
+        };
         
         // --- PAGE 1: INDEX (Only if multi-station) ---
         const isBandscan = bandscanEntries.length > 1;
@@ -1184,8 +1238,19 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             let detailY = 62;
             let historyPageStarted = false; 
             const sourceReport = entry.rdsReport || content;
-            const filteredEntryReport = getFilteredReport(sourceReport);
-            const sections = filteredEntryReport.split(/\n\s*\n/).filter(s => !s.includes('MHz >') && !s.includes('Generated on:') && !s.includes('km -') && !s.includes('Modulation:') && !s.includes('Signal strength:')); 
+            // Pour le PDF, on gère les filtres d'historique séparément pour conserver les caractères \r nécessaires à l'affichage des codes
+            let pdfSource = sourceReport;
+            if (!includeRtHistory) pdfSource = pdfSource.replace(/\[9\] RADIOTEXT HISTORY[\s\S]*?(?=\[10\]|={20,}|$)/g, "");
+            if (!includePsHistory) pdfSource = pdfSource.replace(/\[10\] PS \/ PTY \/ PTYN HISTORY[\s\S]*?(?=={20,}|$)/g, "");
+            
+            if (signalUnit === 'dBuV') {
+                pdfSource = pdfSource.replace(/(\d+\.\d+|\d+)\s+dBf/g, (match, p1) => {
+                    const converted = (parseFloat(p1) - 11.2).toFixed(1);
+                    return `${converted} dBuV`;
+                });
+            }
+
+            const sections = pdfSource.split(/\n\s*\n/).filter(s => !s.includes('MHz >') && !s.includes('Generated on:') && !s.includes('km -') && !s.includes('Modulation:') && !s.includes('Signal strength:')); 
             
             sections.forEach((section, sIdx) => {
                 const lines = section.split('\n').filter(l => l.trim().length > 0 && !l.includes('-----') && !l.includes('===='));
@@ -1289,7 +1354,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                                 }
                             });
                         } else if (sectionTitle.includes('[3]')) {
-                            doc.text(value, valueX, detailY);
+                            drawTextWithCodes(value, valueX, detailY, 9);
                         } else {
                             const wrappedValue = doc.splitTextToSize(value, maxWidth);
                             wrappedValue.forEach((vLine: string, vIdx: number) => {
@@ -1488,3 +1553,32 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
         </div>
     );
 };
+
+const ApiErrorModal: React.FC<{ code: string; onClose: () => void }> = ({ code, onClose }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="bg-slate-900 border-2 border-red-500/50 rounded-lg shadow-2xl w-full max-w-sm flex flex-col overflow-hidden relative text-center">
+      <div className="p-6 space-y-4">
+        <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto border border-red-500/30">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className="space-y-2">
+            <h3 className="text-lg font-bold text-white">Error</h3>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Unable to contact the webserver API!<br />
+              <span className="font-mono text-red-400">Error code: {code}</span>
+            </p>
+        </div>
+      </div>
+      <div className="p-3 bg-slate-950 border-t border-slate-800 flex justify-center">
+        <button 
+          onClick={onClose} 
+          className="px-6 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded transition-colors uppercase border border-slate-600"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+);
