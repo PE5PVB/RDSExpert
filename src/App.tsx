@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   RdsData, 
@@ -621,7 +620,7 @@ const App: React.FC = () => {
     const rawFreq = lastApiDataRef.current?.freq || "??.?";
     const freqFormatted = rawFreq !== "??.?" ? fmtFreq(rawFreq) : "??.?";
     const tx = lastApiDataRef.current?.tx || renderRdsBuffer(state.psBuffer).trim() || "Unknown";
-    const city = (lastApiDataRef.current?.city || "Unknown").split(' | ')[0];
+    const city = (lastApiDataRef.current?.city || "[Unknown]").split(' | ')[0];
     const dist = lastApiDataRef.current?.dist || "??";
     const power = lastApiDataRef.current?.erp || "?";
     const mod = lastApiDataRef.current?.st ? "Stereo" : "Mono";
@@ -671,13 +670,13 @@ const App: React.FC = () => {
 
     content += `[3] RADIOTEXT\n`;
     content += `-------------\n`;
-    const rtAVal = renderRdsBuffer(state.rtBuffer0).replace(/\r/g, '').trim();
-    const rtBVal = renderRdsBuffer(state.rtBuffer1).replace(/\r/g, '').trim();
+    const rtAVal = renderRdsBuffer(state.rtBuffer0).trim();
+    const rtBVal = renderRdsBuffer(state.rtBuffer1).trim();
     if (!rtAVal && !rtBVal) {
         content += `No Radiotext detected.\n\n`;
     } else {
-        content += `Line A:  ${renderRdsBuffer(state.rtBuffer0).replace(/\r/g, '')}\n`;
-        content += `Line B:  ${(renderRdsBuffer(state.rtBuffer1)).replace(/\r/g, '')}\n\n`;
+        content += `Line A:  ${renderRdsBuffer(state.rtBuffer0)}\n`;
+        content += `Line B:  ${(renderRdsBuffer(state.rtBuffer1))}\n\n`;
     }
 
     content += `[4] ALTERNATIVE FREQUENCIES (AF)\n`;
@@ -715,7 +714,7 @@ const App: React.FC = () => {
     content += `---------------------------------\n`;
     if (state.eonMap.size > 0) {
         state.eonMap.forEach((net) => {
-            content += `  PI: ${net.pi} | PS: ${net.ps.replace(/ /g, '_')}\n`;
+            content += `  - PI: ${net.pi} > PS: ${net.ps.replace(/ /g, '_')} (TP = ${net.tp ? '1' : '0'} | TA = ${net.ta ? '1' : '0'} | PTY: ${net.pty})\n`;
             if (net.af.length > 0) content += `    AF Method A: [${net.af.join(' / ')}]\n`;
             if (net.mappedFreqs.length > 0) content += `    Mapped Frequencies: [${net.mappedFreqs.join(' / ')}]\n`;
         });
@@ -846,7 +845,7 @@ const App: React.FC = () => {
         freq: lastApiDataRef.current?.freq || "??.?",
         signal: lastApiDataRef.current?.sig || 0,
         stationName: lastApiDataRef.current?.tx || psRaw || "Unknown",
-        city: lastApiDataRef.current?.city || "Unknown",
+        city: lastApiDataRef.current?.city || "[Unknown]",
         pi: state.currentPi,
         ps: firstPsDecoded,
         isDynamic: isDynamic,
@@ -888,7 +887,7 @@ const App: React.FC = () => {
             freq: json.freq,
             sig: json.sig,
             tx: txValue || json.ps || "Unknown",
-            city: json.txInfo?.city || "Unknown",
+            city: json.txInfo?.city || "[Unknown]",
             dist: json.txInfo?.dist,
             erp: json.txInfo?.erp,
             st: json.st
@@ -899,9 +898,11 @@ const App: React.FC = () => {
             if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
             apiTimeoutRef.current = setTimeout(() => fetchBandscanMetadata(retryCount + 1), 5000);
         }
+      } else {
+        (window as any).showRdsApiError?.(response.status.toString());
       }
     } catch(e) {
-      // Fail silently
+      (window as any).showRdsApiError?.("Network Error");
     }
   };
 
