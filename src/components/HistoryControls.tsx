@@ -1566,7 +1566,7 @@ const ApiErrorModal: React.FC<{ code: string; onClose: () => void }> = ({ code, 
         <div className="space-y-2">
             <h3 className="text-lg font-bold text-white">Error</h3>
             <p className="text-slate-300 text-sm leading-relaxed">
-              Unable to contact the webserver API!<br />
+              Unable to contact the webserver API.<br />
               <span className="font-mono text-red-400">Error code: {code}</span>
             </p>
         </div>
