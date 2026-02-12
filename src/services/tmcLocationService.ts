@@ -1,13 +1,10 @@
 import { TmcResolvedLocation } from '../types';
-
-interface OverpassElement {
-  type: string;
-  id: number;
-  center?: { lat: number; lon: number };
-  lat?: number;
-  lon?: number;
-  tags?: Record<string, string>;
-}
+import {
+  OVERPASS_ENDPOINTS,
+  TMC_QUERY_STRATEGIES,
+  TMC_SERVICE_CONFIG,
+  OverpassElement,
+} from '../config/tmcSources';
 
 interface OverpassResponse {
   elements: OverpassElement[];
@@ -17,46 +14,36 @@ interface OverpassResponse {
 const locationCache = new Map<string, TmcResolvedLocation>();
 const pendingResolutions = new Set<string>();
 
-// Known working format per country: key = "cid:tabcd"
-const formatCache = new Map<string, 'node' | 'relation'>();
-
-const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-];
-const BATCH_SIZE = 50;
-const RATE_LIMIT_MS = 1100;
-const QUERY_TIMEOUT_MS = 20000;
-const MAX_RETRIES = 2;
+// Known working strategy index per country: key = "cid:tabcd"
+const strategyCache = new Map<string, number>();
 
 let lastQueryTime = 0;
-let activeEndpoint = 0; // Index into OVERPASS_ENDPOINTS
+let activeEndpoint = 0;
 
 async function rateLimitWait(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastQueryTime;
-  if (elapsed < RATE_LIMIT_MS) {
-    await new Promise(r => setTimeout(r, RATE_LIMIT_MS - elapsed));
+  if (elapsed < TMC_SERVICE_CONFIG.rateLimitMs) {
+    await new Promise(r => setTimeout(r, TMC_SERVICE_CONFIG.rateLimitMs - elapsed));
   }
 }
 
 async function queryOverpass(query: string): Promise<OverpassResponse> {
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    // On retry, try the next endpoint
+  for (let attempt = 0; attempt <= TMC_SERVICE_CONFIG.maxRetries; attempt++) {
     const endpointIndex = (activeEndpoint + attempt) % OVERPASS_ENDPOINTS.length;
     const endpoint = OVERPASS_ENDPOINTS[endpointIndex];
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), TMC_SERVICE_CONFIG.queryTimeoutMs);
 
     try {
       if (attempt > 0) {
-        await new Promise(r => setTimeout(r, 2000 * attempt)); // Backoff
+        await new Promise(r => setTimeout(r, 2000 * attempt));
       }
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(endpoint.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `data=${encodeURIComponent(query)}`,
@@ -65,24 +52,23 @@ async function queryOverpass(query: string): Promise<OverpassResponse> {
 
       if (response.ok) {
         lastQueryTime = Date.now();
-        activeEndpoint = endpointIndex; // Remember working endpoint
+        activeEndpoint = endpointIndex;
         return response.json();
       }
 
-      // 429 (rate limited) or 504 (timeout) — worth retrying
       if (response.status === 429 || response.status === 504) {
-        lastError = new Error(`Overpass API ${response.status} from ${endpoint}`);
+        lastError = new Error(`Overpass API ${response.status} from ${endpoint.name}`);
         continue;
       }
 
-      throw new Error(`Overpass API error: ${response.status}`);
+      throw new Error(`Overpass API error: ${response.status} from ${endpoint.name}`);
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
-        lastError = new Error(`Overpass API timeout from ${endpoint}`);
+        lastError = new Error(`Overpass API timeout from ${endpoint.name}`);
         continue;
       }
-      if (attempt < MAX_RETRIES) {
+      if (attempt < TMC_SERVICE_CONFIG.maxRetries) {
         lastError = err;
         continue;
       }
@@ -95,125 +81,40 @@ async function queryOverpass(query: string): Promise<OverpassResponse> {
   throw lastError || new Error('Overpass API failed after retries');
 }
 
-// Query node-level TMC tags (e.g. TMC:cid_58:tabcd_1:LocationCode)
-async function queryNodeBatch(
-  lcds: number[],
-  cid: number,
-  tabcd: number
-): Promise<Map<number, TmcResolvedLocation>> {
-  const tagKey = `TMC:cid_${cid}:tabcd_${tabcd}:LocationCode`;
-  const lcdPattern = lcds.join('|');
-
-  const query = `[out:json][timeout:30];
-node["${tagKey}"~"^(${lcdPattern})$"];
-out;`;
-
-  const data = await queryOverpass(query);
-  const resolved = new Map<number, TmcResolvedLocation>();
-
-  const tagPrefix = `TMC:cid_${cid}:tabcd_${tabcd}`;
-  for (const el of data.elements) {
-    if (el.lat !== undefined && el.lon !== undefined && el.tags) {
-      const lcdStr = el.tags[tagKey];
-      if (lcdStr) {
-        const lcd = parseInt(lcdStr, 10);
-        if (!isNaN(lcd)) {
-          const prevStr = el.tags[`${tagPrefix}:PrevLocationCode`];
-          const nextStr = el.tags[`${tagPrefix}:NextLocationCode`];
-          resolved.set(lcd, {
-            locationCode: lcd,
-            lat: el.lat,
-            lon: el.lon,
-            name: el.tags.name || undefined,
-            prevLocationCode: prevStr ? parseInt(prevStr, 10) : undefined,
-            nextLocationCode: nextStr ? parseInt(nextStr, 10) : undefined,
-            status: 'resolved'
-          });
-        }
-      }
-    }
-  }
-
-  return resolved;
-}
-
-// Query tmc:point relations
-async function queryRelationBatch(
-  lcds: number[],
-  cid: number,
-  tabcd: number
-): Promise<Map<number, TmcResolvedLocation>> {
-  const lcdPattern = lcds.join('|');
-  const table = `${cid}:${tabcd}`;
-
-  const query = `[out:json][timeout:30];
-relation["type"="tmc:point"]["table"="${table}"]["lcd"~"^(${lcdPattern})$"];
-out center;`;
-
-  const data = await queryOverpass(query);
-  const resolved = new Map<number, TmcResolvedLocation>();
-
-  for (const el of data.elements) {
-    if (el.tags?.lcd && el.center) {
-      const lcd = parseInt(el.tags.lcd, 10);
-      if (!isNaN(lcd)) {
-        resolved.set(lcd, {
-          locationCode: lcd,
-          lat: el.center.lat,
-          lon: el.center.lon,
-          name: el.tags.name || undefined,
-          roadRef: el.tags.road_ref || undefined,
-          status: 'resolved'
-        });
-      }
-    }
-  }
-
-  return resolved;
-}
-
-// Try both query formats, return results from whichever works
+// Try all configured strategies, return results from whichever works first
 async function queryBatchAutoDetect(
   lcds: number[],
   cid: number,
   tabcd: number
 ): Promise<Map<number, TmcResolvedLocation>> {
   const key = `${cid}:${tabcd}`;
-  const knownFormat = formatCache.get(key);
+  const knownIndex = strategyCache.get(key);
 
-  // If we know the format, use it directly
-  if (knownFormat === 'node') {
-    return queryNodeBatch(lcds, cid, tabcd);
-  }
-  if (knownFormat === 'relation') {
-    return queryRelationBatch(lcds, cid, tabcd);
+  // If we already know which strategy works, use it directly
+  if (knownIndex !== undefined) {
+    const strategy = TMC_QUERY_STRATEGIES[knownIndex];
+    const query = strategy.buildQuery(lcds, cid, tabcd);
+    const data = await queryOverpass(query);
+    return strategy.parseResponse(data.elements, cid, tabcd);
   }
 
-  // Try node format first (most common, e.g. Germany)
-  try {
-    const nodeResults = await queryNodeBatch(lcds, cid, tabcd);
-    if (nodeResults.size > 0) {
-      formatCache.set(key, 'node');
-      return nodeResults;
+  // Try each strategy in order
+  for (let i = 0; i < TMC_QUERY_STRATEGIES.length; i++) {
+    const strategy = TMC_QUERY_STRATEGIES[i];
+    try {
+      if (i > 0) await rateLimitWait();
+      const query = strategy.buildQuery(lcds, cid, tabcd);
+      const data = await queryOverpass(query);
+      const results = strategy.parseResponse(data.elements, cid, tabcd);
+      if (results.size > 0) {
+        strategyCache.set(key, i);
+        return results;
+      }
+    } catch (err) {
+      console.warn(`Strategy "${strategy.name}" failed, trying next:`, err);
     }
-  } catch (err) {
-    console.warn('Node query failed, trying relation format:', err);
   }
 
-  await rateLimitWait();
-
-  // Try relation format
-  try {
-    const relResults = await queryRelationBatch(lcds, cid, tabcd);
-    if (relResults.size > 0) {
-      formatCache.set(key, 'relation');
-      return relResults;
-    }
-  } catch (err) {
-    console.warn('Relation query also failed:', err);
-  }
-
-  // Both returned empty or failed
   return new Map();
 }
 
@@ -225,7 +126,6 @@ export async function resolveLocations(
   const results = new Map<number, TmcResolvedLocation>();
   const unresolvedCodes: number[] = [];
 
-  // Check cache first
   for (const lcd of locationCodes) {
     const cacheKey = `${cid}:${tabcd}:${lcd}`;
     const cached = locationCache.get(cacheKey);
@@ -238,10 +138,9 @@ export async function resolveLocations(
 
   if (unresolvedCodes.length === 0) return results;
 
-  // Split into batches
   const batches: number[][] = [];
-  for (let i = 0; i < unresolvedCodes.length; i += BATCH_SIZE) {
-    batches.push(unresolvedCodes.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < unresolvedCodes.length; i += TMC_SERVICE_CONFIG.batchSize) {
+    batches.push(unresolvedCodes.slice(i, i + TMC_SERVICE_CONFIG.batchSize));
   }
 
   for (const batch of batches) {
@@ -271,7 +170,6 @@ export async function resolveLocations(
       batch.forEach(lcd => {
         pendingResolutions.delete(`${cid}:${tabcd}:${lcd}`);
       });
-      // Re-throw so the UI can show the error
       throw err;
     }
   }
@@ -282,7 +180,7 @@ export async function resolveLocations(
 export function clearLocationCache(): void {
   locationCache.clear();
   pendingResolutions.clear();
-  formatCache.clear();
+  strategyCache.clear();
 }
 
 export function getCacheSize(): number {
