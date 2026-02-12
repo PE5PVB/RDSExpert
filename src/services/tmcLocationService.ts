@@ -17,15 +17,20 @@ interface OverpassResponse {
 const locationCache = new Map<string, TmcResolvedLocation>();
 const pendingResolutions = new Set<string>();
 
-// Cache for availability check: key = "cid:tabcd"
-const availabilityCache = new Map<string, 'node' | 'relation' | 'none'>();
+// Known working format per country: key = "cid:tabcd"
+const formatCache = new Map<string, 'node' | 'relation'>();
 
-const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 const BATCH_SIZE = 50;
 const RATE_LIMIT_MS = 1100;
-const QUERY_TIMEOUT_MS = 15000; // Abort fetch after 15s
+const QUERY_TIMEOUT_MS = 20000;
+const MAX_RETRIES = 2;
 
 let lastQueryTime = 0;
+let activeEndpoint = 0; // Index into OVERPASS_ENDPOINTS
 
 async function rateLimitWait(): Promise<void> {
   const now = Date.now();
@@ -36,69 +41,58 @@ async function rateLimitWait(): Promise<void> {
 }
 
 async function queryOverpass(query: string): Promise<OverpassResponse> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+  let lastError: Error | null = null;
 
-  try {
-    const response = await fetch(OVERPASS_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal
-    });
-    if (!response.ok) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // On retry, try the next endpoint
+    const endpointIndex = (activeEndpoint + attempt) % OVERPASS_ENDPOINTS.length;
+    const endpoint = OVERPASS_ENDPOINTS[endpointIndex];
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+
+    try {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 2000 * attempt)); // Backoff
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal
+      });
+
+      if (response.ok) {
+        lastQueryTime = Date.now();
+        activeEndpoint = endpointIndex; // Remember working endpoint
+        return response.json();
+      }
+
+      // 429 (rate limited) or 504 (timeout) — worth retrying
+      if (response.status === 429 || response.status === 504) {
+        lastError = new Error(`Overpass API ${response.status} from ${endpoint}`);
+        continue;
+      }
+
       throw new Error(`Overpass API error: ${response.status}`);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        lastError = new Error(`Overpass API timeout from ${endpoint}`);
+        continue;
+      }
+      if (attempt < MAX_RETRIES) {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    lastQueryTime = Date.now();
-    return response.json();
-  } finally {
-    clearTimeout(timeoutId);
   }
-}
 
-// Probe if TMC location data exists in OSM for a given CID:TABCD
-// by looking up a sample location code. Count queries are too heavy
-// for the Overpass API, so we probe with a specific code instead.
-export async function checkAvailability(
-  cid: number,
-  tabcd: number,
-  sampleLocationCode: number
-): Promise<'node' | 'relation' | 'none'> {
-  const key = `${cid}:${tabcd}`;
-  const cached = availabilityCache.get(key);
-  if (cached !== undefined) return cached;
-
-  await rateLimitWait();
-
-  // Probe node-level tags first (most common format, e.g. Germany)
-  try {
-    const tagKey = `TMC:cid_${cid}:tabcd_${tabcd}:LocationCode`;
-    const nodeQuery = `[out:json][timeout:10];
-node["${tagKey}"="${sampleLocationCode}"];
-out 1;`;
-    const nodeData = await queryOverpass(nodeQuery);
-    if (nodeData.elements?.length > 0) {
-      availabilityCache.set(key, 'node');
-      return 'node';
-    }
-  } catch { /* continue to next check */ }
-
-  await rateLimitWait();
-
-  // Probe relation-based format
-  try {
-    const relQuery = `[out:json][timeout:10];
-relation["type"="tmc:point"]["table"="${cid}:${tabcd}"]["lcd"="${sampleLocationCode}"];
-out center 1;`;
-    const relData = await queryOverpass(relQuery);
-    if (relData.elements?.length > 0) {
-      availabilityCache.set(key, 'relation');
-      return 'relation';
-    }
-  } catch { /* no relation data */ }
-
-  // Sample code not found — don't cache as 'none' yet, another code might exist
-  return 'none';
+  throw lastError || new Error('Overpass API failed after retries');
 }
 
 // Query node-level TMC tags (e.g. TMC:cid_58:tabcd_1:LocationCode)
@@ -173,19 +167,49 @@ out center;`;
   return resolved;
 }
 
-async function queryBatch(
+// Try both query formats, return results from whichever works
+async function queryBatchAutoDetect(
   lcds: number[],
   cid: number,
-  tabcd: number,
-  format: 'node' | 'relation'
+  tabcd: number
 ): Promise<Map<number, TmcResolvedLocation>> {
-  await rateLimitWait();
+  const key = `${cid}:${tabcd}`;
+  const knownFormat = formatCache.get(key);
 
-  if (format === 'node') {
+  // If we know the format, use it directly
+  if (knownFormat === 'node') {
     return queryNodeBatch(lcds, cid, tabcd);
-  } else {
+  }
+  if (knownFormat === 'relation') {
     return queryRelationBatch(lcds, cid, tabcd);
   }
+
+  // Try node format first (most common, e.g. Germany)
+  try {
+    const nodeResults = await queryNodeBatch(lcds, cid, tabcd);
+    if (nodeResults.size > 0) {
+      formatCache.set(key, 'node');
+      return nodeResults;
+    }
+  } catch (err) {
+    console.warn('Node query failed, trying relation format:', err);
+  }
+
+  await rateLimitWait();
+
+  // Try relation format
+  try {
+    const relResults = await queryRelationBatch(lcds, cid, tabcd);
+    if (relResults.size > 0) {
+      formatCache.set(key, 'relation');
+      return relResults;
+    }
+  } catch (err) {
+    console.warn('Relation query also failed:', err);
+  }
+
+  // Both returned empty or failed
+  return new Map();
 }
 
 export async function resolveLocations(
@@ -209,38 +233,6 @@ export async function resolveLocations(
 
   if (unresolvedCodes.length === 0) return results;
 
-  // Determine data format: use cached availability or probe with first code
-  const availKey = `${cid}:${tabcd}`;
-  let format = availabilityCache.get(availKey);
-
-  if (!format) {
-    format = await checkAvailability(cid, tabcd, unresolvedCodes[0]);
-    if (format !== 'none') {
-      availabilityCache.set(availKey, format);
-    }
-  }
-
-  if (format === 'none') {
-    // Try probing a few more codes before giving up
-    for (let i = 1; i < Math.min(unresolvedCodes.length, 5); i++) {
-      format = await checkAvailability(cid, tabcd, unresolvedCodes[i]);
-      if (format !== 'none') {
-        availabilityCache.set(availKey, format);
-        break;
-      }
-    }
-  }
-
-  if (format === 'none') {
-    // No data available — mark all as not_found
-    unresolvedCodes.forEach(lcd => {
-      const cacheKey = `${cid}:${tabcd}:${lcd}`;
-      const notFound: TmcResolvedLocation = { locationCode: lcd, lat: 0, lon: 0, status: 'not_found' };
-      locationCache.set(cacheKey, notFound);
-    });
-    return results;
-  }
-
   // Split into batches
   const batches: number[][] = [];
   for (let i = 0; i < unresolvedCodes.length; i += BATCH_SIZE) {
@@ -251,7 +243,8 @@ export async function resolveLocations(
     batch.forEach(lcd => pendingResolutions.add(`${cid}:${tabcd}:${lcd}`));
 
     try {
-      const resolved = await queryBatch(batch, cid, tabcd, format!);
+      await rateLimitWait();
+      const resolved = await queryBatchAutoDetect(batch, cid, tabcd);
 
       resolved.forEach((loc, lcd) => {
         const cacheKey = `${cid}:${tabcd}:${lcd}`;
@@ -269,10 +262,12 @@ export async function resolveLocations(
         }
       });
     } catch (err) {
-      console.error('Overpass query failed:', err);
+      console.error('Overpass query failed after retries:', err);
       batch.forEach(lcd => {
         pendingResolutions.delete(`${cid}:${tabcd}:${lcd}`);
       });
+      // Re-throw so the UI can show the error
+      throw err;
     }
   }
 
@@ -282,7 +277,7 @@ export async function resolveLocations(
 export function clearLocationCache(): void {
   locationCache.clear();
   pendingResolutions.clear();
-  availabilityCache.clear();
+  formatCache.clear();
 }
 
 export function getCacheSize(): number {
