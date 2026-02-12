@@ -56,23 +56,28 @@ async function queryOverpass(query: string): Promise<OverpassResponse> {
   }
 }
 
-// Check if TMC location data exists in OSM for a given CID:TABCD.
-// Returns the data format that's available, or 'none'.
-export async function checkAvailability(cid: number, tabcd: number): Promise<'node' | 'relation' | 'none'> {
+// Probe if TMC location data exists in OSM for a given CID:TABCD
+// by looking up a sample location code. Count queries are too heavy
+// for the Overpass API, so we probe with a specific code instead.
+export async function checkAvailability(
+  cid: number,
+  tabcd: number,
+  sampleLocationCode: number
+): Promise<'node' | 'relation' | 'none'> {
   const key = `${cid}:${tabcd}`;
   const cached = availabilityCache.get(key);
   if (cached !== undefined) return cached;
 
   await rateLimitWait();
 
-  // Check node-level tags first (most common format, e.g. Germany)
+  // Probe node-level tags first (most common format, e.g. Germany)
   try {
+    const tagKey = `TMC:cid_${cid}:tabcd_${tabcd}:LocationCode`;
     const nodeQuery = `[out:json][timeout:10];
-node["TMC:cid_${cid}:tabcd_${tabcd}:LocationCode"](if:1==1);
-out count;`;
+node["${tagKey}"="${sampleLocationCode}"];
+out 1;`;
     const nodeData = await queryOverpass(nodeQuery);
-    const nodeCount = nodeData.elements?.[0]?.tags?.total;
-    if (nodeCount && parseInt(nodeCount, 10) > 0) {
+    if (nodeData.elements?.length > 0) {
       availabilityCache.set(key, 'node');
       return 'node';
     }
@@ -80,20 +85,19 @@ out count;`;
 
   await rateLimitWait();
 
-  // Check relation-based format
+  // Probe relation-based format
   try {
     const relQuery = `[out:json][timeout:10];
-relation["type"="tmc:point"]["table"="${cid}:${tabcd}"];
-out count;`;
+relation["type"="tmc:point"]["table"="${cid}:${tabcd}"]["lcd"="${sampleLocationCode}"];
+out center 1;`;
     const relData = await queryOverpass(relQuery);
-    const relCount = relData.elements?.[0]?.tags?.total;
-    if (relCount && parseInt(relCount, 10) > 0) {
+    if (relData.elements?.length > 0) {
       availabilityCache.set(key, 'relation');
       return 'relation';
     }
   } catch { /* no relation data */ }
 
-  availabilityCache.set(key, 'none');
+  // Sample code not found — don't cache as 'none' yet, another code might exist
   return 'none';
 }
 
@@ -205,8 +209,28 @@ export async function resolveLocations(
 
   if (unresolvedCodes.length === 0) return results;
 
-  // Check which format is available
-  const format = await checkAvailability(cid, tabcd);
+  // Determine data format: use cached availability or probe with first code
+  const availKey = `${cid}:${tabcd}`;
+  let format = availabilityCache.get(availKey);
+
+  if (!format) {
+    format = await checkAvailability(cid, tabcd, unresolvedCodes[0]);
+    if (format !== 'none') {
+      availabilityCache.set(availKey, format);
+    }
+  }
+
+  if (format === 'none') {
+    // Try probing a few more codes before giving up
+    for (let i = 1; i < Math.min(unresolvedCodes.length, 5); i++) {
+      format = await checkAvailability(cid, tabcd, unresolvedCodes[i]);
+      if (format !== 'none') {
+        availabilityCache.set(availKey, format);
+        break;
+      }
+    }
+  }
+
   if (format === 'none') {
     // No data available — mark all as not_found
     unresolvedCodes.forEach(lcd => {
@@ -227,7 +251,7 @@ export async function resolveLocations(
     batch.forEach(lcd => pendingResolutions.add(`${cid}:${tabcd}:${lcd}`));
 
     try {
-      const resolved = await queryBatch(batch, cid, tabcd, format);
+      const resolved = await queryBatch(batch, cid, tabcd, format!);
 
       resolved.forEach((loc, lcd) => {
         const cacheKey = `${cid}:${tabcd}:${lcd}`;

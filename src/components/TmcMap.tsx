@@ -3,7 +3,7 @@ declare const L: any; // Leaflet loaded via CDN
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { TmcMessage, TmcServiceInfo, TmcResolvedLocation } from '../types';
 import { ECC_PI_TO_TMC_CID } from '../constants';
-import { resolveLocations, checkAvailability, getCacheSize } from '../services/tmcLocationService';
+import { resolveLocations, getCacheSize } from '../services/tmcLocationService';
 
 interface TmcMapProps {
   messages: TmcMessage[];
@@ -59,7 +59,6 @@ export const TmcMap: React.FC<TmcMapProps> = ({
   const [resolvedCount, setResolvedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [manualCountry, setManualCountry] = useState<{ cid: number; defaultTabcd: number; country: string } | null>(null);
-  const [dataAvailable, setDataAvailable] = useState<'node' | 'relation' | 'none' | 'unknown'>('unknown');
 
   const autoInfo = deriveCid(ecc, pi);
   const tmcInfo = autoInfo || manualCountry;
@@ -104,28 +103,20 @@ export const TmcMap: React.FC<TmcMapProps> = ({
 
     setLoading(true);
     setError(null);
-    setDataAvailable('unknown');
 
     try {
-      // Quick availability check before querying individual codes
-      const availability = await checkAvailability(cid, tabcd);
-      setDataAvailable(availability);
-
-      if (availability === 'none') {
-        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Not all countries have TMC locations imported into OSM.`);
-        setLoading(false);
-        return;
-      }
-
       const resolved = await resolveLocations(uniqueCodes, cid, tabcd);
       setResolvedLocations(prev => {
         const merged = new Map(prev);
         resolved.forEach((v, k) => merged.set(k, v));
         return merged;
       });
-      setResolvedCount(
-        [...resolved.values()].filter(l => l.status === 'resolved').length
-      );
+      const resolvedItems = [...resolved.values()].filter(l => l.status === 'resolved');
+      setResolvedCount(resolvedItems.length);
+
+      if (resolvedItems.length === 0 && uniqueCodes.length > 0) {
+        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Not all countries have TMC locations imported into OSM.`);
+      }
     } catch (err: any) {
       setError(`Failed to resolve locations: ${err.message || err}`);
     } finally {
