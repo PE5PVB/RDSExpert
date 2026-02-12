@@ -84,7 +84,15 @@ export const TmcMap: React.FC<TmcMapProps> = ({
     // Fix grey tiles when map is rendered inside a modal
     setTimeout(() => map.invalidateSize(), 300);
 
+    // Keep map size in sync with container (fixes gray bar after zoom/resize)
+    const container = mapContainerRef.current;
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
       markersLayerRef.current = null;
