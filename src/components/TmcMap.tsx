@@ -34,6 +34,19 @@ function deriveCid(ecc: string, pi: string): { cid: number; defaultTabcd: number
   return ECC_PI_TO_TMC_CID[key] || null;
 }
 
+// Build deduplicated country list sorted alphabetically
+const COUNTRY_LIST: { cid: number; defaultTabcd: number; country: string }[] = (() => {
+  const seen = new Set<number>();
+  const list: { cid: number; defaultTabcd: number; country: string }[] = [];
+  for (const entry of Object.values(ECC_PI_TO_TMC_CID)) {
+    if (!seen.has(entry.cid)) {
+      seen.add(entry.cid);
+      list.push(entry);
+    }
+  }
+  return list.sort((a, b) => a.country.localeCompare(b.country));
+})();
+
 export const TmcMap: React.FC<TmcMapProps> = ({
   messages, serviceInfo, ecc, pi, isOpen, onClose
 }) => {
@@ -45,10 +58,13 @@ export const TmcMap: React.FC<TmcMapProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [manualCountry, setManualCountry] = useState<{ cid: number; defaultTabcd: number; country: string } | null>(null);
 
-  const tmcInfo = deriveCid(ecc, pi);
+  const autoInfo = deriveCid(ecc, pi);
+  const tmcInfo = autoInfo || manualCountry;
   const cid = tmcInfo?.cid;
   const tabcd = serviceInfo.ltn > 0 ? serviceInfo.ltn : (tmcInfo?.defaultTabcd || 0);
+  const needsManualSelect = !autoInfo && !manualCountry;
 
   // Initialize map when modal opens
   useEffect(() => {
@@ -179,7 +195,7 @@ export const TmcMap: React.FC<TmcMapProps> = ({
             )}
             {tmcInfo && (
               <span className="text-[10px] text-slate-500 font-mono">
-                {tmcInfo.country} (CID:{cid}, TABCD:{tabcd})
+                {tmcInfo.country}{!autoInfo ? ' (manual)' : ''} (CID:{cid}, TABCD:{tabcd})
               </span>
             )}
             <span className="text-[10px] text-slate-500 font-mono">
@@ -210,11 +226,23 @@ export const TmcMap: React.FC<TmcMapProps> = ({
           </div>
         )}
 
-        {/* Warning: CID not determined */}
-        {!cid && (
-          <div className="bg-yellow-900/30 border-b border-yellow-500/30 px-4 py-2 text-yellow-400 text-xs">
-            Cannot determine TMC country from ECC ({ecc || 'unknown'}) and PI ({pi || 'unknown'}).
-            Location resolution requires ECC data from Group 1A.
+        {/* Country selector when ECC is not available */}
+        {needsManualSelect && (
+          <div className="bg-slate-950 border-b border-slate-800 px-4 py-3 shrink-0">
+            <div className="text-yellow-400 text-xs mb-2">
+              Country not detected (no ECC from Group 1A). Please select the country:
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {COUNTRY_LIST.map(entry => (
+                <button
+                  key={entry.cid}
+                  onClick={() => setManualCountry(entry)}
+                  className="px-2.5 py-1 text-[10px] font-bold rounded border bg-slate-800 text-slate-300 border-slate-700 hover:bg-cyan-900/40 hover:text-cyan-300 hover:border-cyan-500/50 transition-colors"
+                >
+                  {entry.country}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
