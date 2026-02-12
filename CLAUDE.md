@@ -68,11 +68,28 @@ A custom `RDS_G2_MAP` character table maps RDS character codes to Unicode.
 
 ### TMC Map & Location Resolution
 
-The TMC viewer includes an interactive map (Leaflet via CDN) that plots traffic messages on OpenStreetMap. Location codes are resolved to coordinates via the Overpass API.
+The TMC viewer includes an interactive map (Leaflet via CDN) that plots traffic messages on OpenStreetMap. Location codes are resolved to coordinates using a local-first strategy:
+
+1. **Local JSON files** (`public/tmc/{CID}_{TABCD}.json`) — pre-downloaded national location tables, loaded on-demand and cached in memory. Instant lookup, no external API calls.
+2. **Overpass API** (fallback) — for countries without local data. Uses retry logic with multiple endpoints.
+
+Local data files (served as static assets):
+- `58_1.json` — Germany (38,387 locations, BASt LCL 22.0, CC BY 4.0)
+- `17_1.json` — Finland (~20,000 locations, Digitraffic, CC BY 4.0)
+- `38_1.json` — Netherlands (~7,500 locations, NDW VILD, open data)
+- `40_49.json` — Norway (16,929 locations, Statens vegvesen V.9.2, NLOD)
+
+JSON format: `{ "lcd": [lat, lon, "name", prevLcd, nextLcd], ... }`
+
+To add a new country: convert national TMC location table to this JSON format and save as `public/tmc/{CID}_{TABCD}.json`. Converter scripts in `scripts/`:
+- `convert-ltef.sh` — generic converter for LTEF DAT files (used by Germany, Norway)
+- `convert-finland.sh` — Digitraffic REST API
+- `convert-ndw.sh` — Netherlands NDW WFS
 
 Configuration lives in `src/config/tmcSources.ts`:
+- `lookupLocal()` — local JSON file loader with 404 tracking
 - `OVERPASS_ENDPOINTS` — Overpass API mirror URLs (tried in round-robin on failure)
-- `TMC_QUERY_STRATEGIES` — Query formats with `buildQuery` and `parseResponse` (tried in order; first with results wins and is cached per country)
+- `TMC_QUERY_STRATEGIES` — Overpass query formats (tried in order; first with results wins and is cached per country)
 - `TMC_SERVICE_CONFIG` — Batch size, rate limiting, timeouts, retries
 
 Country detection uses `ECC_PI_TO_TMC_CID` in `constants.ts` to map ECC+PI to TMC Country ID (CID). Falls back to manual country selection if ECC is unavailable.
