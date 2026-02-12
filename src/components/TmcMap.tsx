@@ -141,7 +141,7 @@ export const TmcMap: React.FC<TmcMapProps> = ({
       setResolvedCount(resolvedItems.length);
 
       if (resolvedItems.length === 0 && uniqueCodes.length > 0) {
-        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Not all countries have TMC locations imported into OSM.`);
+        setError(`No TMC location data available for this country (CID:${cid}, TABCD:${tabcd}). No local data file found and no TMC locations in OpenStreetMap. You can add local data by placing a ${cid}_${tabcd}.json file in the tmc/ folder.`);
       }
     } catch (err: any) {
       setError(`Failed to resolve locations: ${err.message || err}`);
@@ -256,6 +256,14 @@ export const TmcMap: React.FC<TmcMapProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-2">
+            {manualCountry && (
+              <button
+                onClick={() => { setManualCountry(null); clearLocationCache(); setResolvedLocations(new Map()); setResolvedCount(0); }}
+                className="px-2 py-1 text-[10px] uppercase font-bold rounded border bg-slate-800 text-yellow-400 border-yellow-500/50 hover:bg-yellow-500/10 transition-colors"
+              >
+                Change Country
+              </button>
+            )}
             <button
               onClick={() => { clearLocationCache(); setResolvedLocations(new Map()); setResolvedCount(0); doResolve(); }}
               disabled={loading || !cid}
