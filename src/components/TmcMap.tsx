@@ -3,7 +3,7 @@ declare const L: any; // Leaflet loaded via CDN
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { TmcMessage, TmcServiceInfo, TmcResolvedLocation } from '../types';
 import { ECC_PI_TO_TMC_CID } from '../constants';
-import { resolveLocations, getCacheSize } from '../services/tmcLocationService';
+import { resolveLocations, checkAvailability, getCacheSize } from '../services/tmcLocationService';
 
 interface TmcMapProps {
   messages: TmcMessage[];
@@ -59,6 +59,7 @@ export const TmcMap: React.FC<TmcMapProps> = ({
   const [resolvedCount, setResolvedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [manualCountry, setManualCountry] = useState<{ cid: number; defaultTabcd: number; country: string } | null>(null);
+  const [dataAvailable, setDataAvailable] = useState<'node' | 'relation' | 'none' | 'unknown'>('unknown');
 
   const autoInfo = deriveCid(ecc, pi);
   const tmcInfo = autoInfo || manualCountry;
@@ -103,8 +104,19 @@ export const TmcMap: React.FC<TmcMapProps> = ({
 
     setLoading(true);
     setError(null);
+    setDataAvailable('unknown');
 
     try {
+      // Quick availability check before querying individual codes
+      const availability = await checkAvailability(cid, tabcd);
+      setDataAvailable(availability);
+
+      if (availability === 'none') {
+        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Currently only Germany has comprehensive TMC data in OSM.`);
+        setLoading(false);
+        return;
+      }
+
       const resolved = await resolveLocations(uniqueCodes, cid, tabcd);
       setResolvedLocations(prev => {
         const merged = new Map(prev);

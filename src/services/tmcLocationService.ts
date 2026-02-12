@@ -17,9 +17,13 @@ interface OverpassResponse {
 const locationCache = new Map<string, TmcResolvedLocation>();
 const pendingResolutions = new Set<string>();
 
+// Cache for availability check: key = "cid:tabcd"
+const availabilityCache = new Map<string, 'node' | 'relation' | 'none'>();
+
 const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
 const BATCH_SIZE = 50;
 const RATE_LIMIT_MS = 1100;
+const QUERY_TIMEOUT_MS = 15000; // Abort fetch after 15s
 
 let lastQueryTime = 0;
 
@@ -32,55 +36,69 @@ async function rateLimitWait(): Promise<void> {
 }
 
 async function queryOverpass(query: string): Promise<OverpassResponse> {
-  const response = await fetch(OVERPASS_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`
-  });
-  if (!response.ok) {
-    throw new Error(`Overpass API error: ${response.status}`);
-  }
-  lastQueryTime = Date.now();
-  return response.json();
-}
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
 
-// Primary query: tmc:point relations (modern OSM tagging)
-async function queryRelationBatch(
-  lcds: number[],
-  cid: number,
-  tabcd: number
-): Promise<Map<number, TmcResolvedLocation>> {
-  const lcdPattern = lcds.join('|');
-  const table = `${cid}:${tabcd}`;
-
-  const query = `[out:json][timeout:60];
-relation["type"="tmc:point"]["table"="${table}"]["lcd"~"^(${lcdPattern})$"];
-out center;`;
-
-  const data = await queryOverpass(query);
-  const resolved = new Map<number, TmcResolvedLocation>();
-
-  for (const el of data.elements) {
-    if (el.tags?.lcd && el.center) {
-      const lcd = parseInt(el.tags.lcd, 10);
-      if (!isNaN(lcd)) {
-        resolved.set(lcd, {
-          locationCode: lcd,
-          lat: el.center.lat,
-          lon: el.center.lon,
-          name: el.tags.name || undefined,
-          roadRef: el.tags.road_ref || undefined,
-          status: 'resolved'
-        });
-      }
+  try {
+    const response = await fetch(OVERPASS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`Overpass API error: ${response.status}`);
     }
+    lastQueryTime = Date.now();
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return resolved;
 }
 
-// Fallback query: node-level TMC tags (legacy/German-style tagging)
-async function queryNodeFallback(
+// Check if TMC location data exists in OSM for a given CID:TABCD.
+// Returns the data format that's available, or 'none'.
+export async function checkAvailability(cid: number, tabcd: number): Promise<'node' | 'relation' | 'none'> {
+  const key = `${cid}:${tabcd}`;
+  const cached = availabilityCache.get(key);
+  if (cached !== undefined) return cached;
+
+  await rateLimitWait();
+
+  // Check node-level tags first (most common format, e.g. Germany)
+  try {
+    const nodeQuery = `[out:json][timeout:10];
+node["TMC:cid_${cid}:tabcd_${tabcd}:LocationCode"](if:1==1);
+out count;`;
+    const nodeData = await queryOverpass(nodeQuery);
+    const nodeCount = nodeData.elements?.[0]?.tags?.total;
+    if (nodeCount && parseInt(nodeCount, 10) > 0) {
+      availabilityCache.set(key, 'node');
+      return 'node';
+    }
+  } catch { /* continue to next check */ }
+
+  await rateLimitWait();
+
+  // Check relation-based format
+  try {
+    const relQuery = `[out:json][timeout:10];
+relation["type"="tmc:point"]["table"="${cid}:${tabcd}"];
+out count;`;
+    const relData = await queryOverpass(relQuery);
+    const relCount = relData.elements?.[0]?.tags?.total;
+    if (relCount && parseInt(relCount, 10) > 0) {
+      availabilityCache.set(key, 'relation');
+      return 'relation';
+    }
+  } catch { /* no relation data */ }
+
+  availabilityCache.set(key, 'none');
+  return 'none';
+}
+
+// Query node-level TMC tags (e.g. TMC:cid_58:tabcd_1:LocationCode)
+async function queryNodeBatch(
   lcds: number[],
   cid: number,
   tabcd: number
@@ -116,25 +134,54 @@ out;`;
   return resolved;
 }
 
-async function queryBatch(
+// Query tmc:point relations
+async function queryRelationBatch(
   lcds: number[],
   cid: number,
   tabcd: number
 ): Promise<Map<number, TmcResolvedLocation>> {
-  await rateLimitWait();
+  const lcdPattern = lcds.join('|');
+  const table = `${cid}:${tabcd}`;
 
-  // Try relation-based query first
-  const resolved = await queryRelationBatch(lcds, cid, tabcd);
+  const query = `[out:json][timeout:30];
+relation["type"="tmc:point"]["table"="${table}"]["lcd"~"^(${lcdPattern})$"];
+out center;`;
 
-  // Fallback to node tags for any unresolved codes
-  const stillUnresolved = lcds.filter(lcd => !resolved.has(lcd));
-  if (stillUnresolved.length > 0) {
-    await rateLimitWait();
-    const fallback = await queryNodeFallback(stillUnresolved, cid, tabcd);
-    fallback.forEach((loc, lcd) => resolved.set(lcd, loc));
+  const data = await queryOverpass(query);
+  const resolved = new Map<number, TmcResolvedLocation>();
+
+  for (const el of data.elements) {
+    if (el.tags?.lcd && el.center) {
+      const lcd = parseInt(el.tags.lcd, 10);
+      if (!isNaN(lcd)) {
+        resolved.set(lcd, {
+          locationCode: lcd,
+          lat: el.center.lat,
+          lon: el.center.lon,
+          name: el.tags.name || undefined,
+          roadRef: el.tags.road_ref || undefined,
+          status: 'resolved'
+        });
+      }
+    }
   }
 
   return resolved;
+}
+
+async function queryBatch(
+  lcds: number[],
+  cid: number,
+  tabcd: number,
+  format: 'node' | 'relation'
+): Promise<Map<number, TmcResolvedLocation>> {
+  await rateLimitWait();
+
+  if (format === 'node') {
+    return queryNodeBatch(lcds, cid, tabcd);
+  } else {
+    return queryRelationBatch(lcds, cid, tabcd);
+  }
 }
 
 export async function resolveLocations(
@@ -158,6 +205,18 @@ export async function resolveLocations(
 
   if (unresolvedCodes.length === 0) return results;
 
+  // Check which format is available
+  const format = await checkAvailability(cid, tabcd);
+  if (format === 'none') {
+    // No data available — mark all as not_found
+    unresolvedCodes.forEach(lcd => {
+      const cacheKey = `${cid}:${tabcd}:${lcd}`;
+      const notFound: TmcResolvedLocation = { locationCode: lcd, lat: 0, lon: 0, status: 'not_found' };
+      locationCache.set(cacheKey, notFound);
+    });
+    return results;
+  }
+
   // Split into batches
   const batches: number[][] = [];
   for (let i = 0; i < unresolvedCodes.length; i += BATCH_SIZE) {
@@ -165,13 +224,11 @@ export async function resolveLocations(
   }
 
   for (const batch of batches) {
-    // Mark as pending
     batch.forEach(lcd => pendingResolutions.add(`${cid}:${tabcd}:${lcd}`));
 
     try {
-      const resolved = await queryBatch(batch, cid, tabcd);
+      const resolved = await queryBatch(batch, cid, tabcd, format);
 
-      // Cache resolved locations
       resolved.forEach((loc, lcd) => {
         const cacheKey = `${cid}:${tabcd}:${lcd}`;
         locationCache.set(cacheKey, loc);
@@ -179,16 +236,10 @@ export async function resolveLocations(
         pendingResolutions.delete(cacheKey);
       });
 
-      // Mark unresolved as not_found
       batch.forEach(lcd => {
         const cacheKey = `${cid}:${tabcd}:${lcd}`;
         if (!resolved.has(lcd)) {
-          const notFound: TmcResolvedLocation = {
-            locationCode: lcd,
-            lat: 0,
-            lon: 0,
-            status: 'not_found'
-          };
+          const notFound: TmcResolvedLocation = { locationCode: lcd, lat: 0, lon: 0, status: 'not_found' };
           locationCache.set(cacheKey, notFound);
           pendingResolutions.delete(cacheKey);
         }
@@ -207,6 +258,7 @@ export async function resolveLocations(
 export function clearLocationCache(): void {
   locationCache.clear();
   pendingResolutions.clear();
+  availabilityCache.clear();
 }
 
 export function getCacheSize(): number {
