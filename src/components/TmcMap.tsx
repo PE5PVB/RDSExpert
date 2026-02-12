@@ -3,7 +3,7 @@ declare const L: any; // Leaflet loaded via CDN
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { TmcMessage, TmcServiceInfo, TmcResolvedLocation } from '../types';
 import { ECC_PI_TO_TMC_CID } from '../constants';
-import { resolveLocations, getCacheSize } from '../services/tmcLocationService';
+import { resolveLocations, getCacheSize, clearLocationCache } from '../services/tmcLocationService';
 
 interface TmcMapProps {
   messages: TmcMessage[];
@@ -257,7 +257,7 @@ export const TmcMap: React.FC<TmcMapProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={doResolve}
+              onClick={() => { clearLocationCache(); setResolvedLocations(new Map()); setResolvedCount(0); doResolve(); }}
               disabled={loading || !cid}
               className="px-2 py-1 text-[10px] uppercase font-bold rounded border bg-slate-800 text-cyan-400 border-slate-700 hover:bg-slate-700 disabled:opacity-30 transition-colors"
             >
