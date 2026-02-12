@@ -170,6 +170,8 @@ export interface TmcResolvedLocation {
   lon: number;
   name?: string;
   roadRef?: string;
+  prevLocationCode?: number;
+  nextLocationCode?: number;
   status: 'resolved' | 'pending' | 'not_found';
 }
 

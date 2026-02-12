@@ -106,6 +106,24 @@ export const TmcMap: React.FC<TmcMapProps> = ({
 
     try {
       const resolved = await resolveLocations(uniqueCodes, cid, tabcd);
+
+      // Collect neighbor codes (Prev/Next) for resolved locations to draw lines
+      const neighborCodes = new Set<number>();
+      resolved.forEach(loc => {
+        if (loc.status === 'resolved') {
+          if (loc.prevLocationCode) neighborCodes.add(loc.prevLocationCode);
+          if (loc.nextLocationCode) neighborCodes.add(loc.nextLocationCode);
+        }
+      });
+      // Remove codes we already have
+      resolved.forEach((_, lcd) => neighborCodes.delete(lcd));
+
+      // Resolve neighbor locations
+      if (neighborCodes.size > 0) {
+        const neighbors = await resolveLocations([...neighborCodes], cid, tabcd);
+        neighbors.forEach((v, k) => resolved.set(k, v));
+      }
+
       setResolvedLocations(prev => {
         const merged = new Map(prev);
         resolved.forEach((v, k) => merged.set(k, v));
@@ -143,6 +161,21 @@ export const TmcMap: React.FC<TmcMapProps> = ({
 
       const natureConfig = NATURE_COLORS[msg.nature] || NATURE_COLORS["Information"];
 
+      // Draw line for Traffic Flow events (files) using Prev/Next location
+      const isTrafficFlow = msg.nature === 'Traffic Flow';
+      if (isTrafficFlow) {
+        const neighborCode = msg.direction ? loc.prevLocationCode : loc.nextLocationCode;
+        const neighborLoc = neighborCode ? resolvedLocations.get(neighborCode) : undefined;
+        if (neighborLoc && neighborLoc.status === 'resolved') {
+          const polyline = L.polyline(
+            [[loc.lat, loc.lon], [neighborLoc.lat, neighborLoc.lon]],
+            { color: natureConfig.color, weight: 4, opacity: 0.7, dashArray: '8, 6' }
+          );
+          polyline.addTo(markersLayerRef.current);
+          bounds.push([neighborLoc.lat, neighborLoc.lon]);
+        }
+      }
+
       const marker = L.circleMarker([loc.lat, loc.lon], {
         radius: msg.urgency === 'High Priority' ? 10 : 7,
         fillColor: natureConfig.color,
@@ -152,6 +185,15 @@ export const TmcMap: React.FC<TmcMapProps> = ({
         fillOpacity: 0.85,
       });
 
+      // Tooltip on hover (compact)
+      const tooltipContent = `<div style="font-family:'Inter',sans-serif;font-size:11px;">
+        <b style="color:${natureConfig.color}">${escapeHtml(msg.label)}</b><br/>
+        #${msg.locationCode}${loc.name ? ` — ${escapeHtml(loc.name)}` : ''}<br/>
+        ${escapeHtml(msg.nature)} · ${escapeHtml(msg.urgency)} · ${escapeHtml(msg.durationLabel)}
+      </div>`;
+      marker.bindTooltip(tooltipContent, { className: 'tmc-popup', direction: 'top', offset: [0, -8] });
+
+      // Popup on click (full details)
       const popupContent = `
         <div style="font-family: 'Inter', sans-serif; min-width: 200px;">
           <div style="font-weight: bold; font-size: 13px; margin-bottom: 6px; color: ${natureConfig.color};">

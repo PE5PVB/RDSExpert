@@ -111,17 +111,22 @@ out;`;
   const data = await queryOverpass(query);
   const resolved = new Map<number, TmcResolvedLocation>();
 
+  const tagPrefix = `TMC:cid_${cid}:tabcd_${tabcd}`;
   for (const el of data.elements) {
     if (el.lat !== undefined && el.lon !== undefined && el.tags) {
       const lcdStr = el.tags[tagKey];
       if (lcdStr) {
         const lcd = parseInt(lcdStr, 10);
         if (!isNaN(lcd)) {
+          const prevStr = el.tags[`${tagPrefix}:PrevLocationCode`];
+          const nextStr = el.tags[`${tagPrefix}:NextLocationCode`];
           resolved.set(lcd, {
             locationCode: lcd,
             lat: el.lat,
             lon: el.lon,
             name: el.tags.name || undefined,
+            prevLocationCode: prevStr ? parseInt(prevStr, 10) : undefined,
+            nextLocationCode: nextStr ? parseInt(nextStr, 10) : undefined,
             status: 'resolved'
           });
         }
