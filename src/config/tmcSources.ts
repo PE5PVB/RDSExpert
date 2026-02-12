@@ -4,19 +4,90 @@ import { TmcResolvedLocation } from '../types';
 // TMC Location Sources Configuration
 //
 // This file defines where and how TMC location codes are resolved to
-// coordinates. To add a new source:
+// coordinates. Sources are tried in this order:
 //
-// 1. Add an endpoint to OVERPASS_ENDPOINTS (for Overpass API mirrors), or
-// 2. Add a new query strategy to TMC_QUERY_STRATEGIES (for different
-//    OSM tagging schemes or entirely different data sources).
+//   1. LOCAL JSON files (pre-downloaded national location tables in public/tmc/)
+//   2. Overpass API strategies (fallback for countries without local data)
 //
-// Strategies are tried in order — the first one that returns results wins,
-// and that strategy is remembered for subsequent queries to the same country.
+// To add a new country:
+//   - Download or convert the national TMC location table to JSON format
+//   - Save as public/tmc/{CID}_{TABCD}.json
+//   - The file format is: { "lcd": [lat, lon, "name", prevLcd, nextLcd], ... }
+//   - The local strategy will automatically pick it up
+//
+// Available local data files:
+//   public/tmc/58_1.json  — Germany      (BASt LCL 22.0, CC BY 4.0)
+//   public/tmc/17_1.json  — Finland      (Digitraffic, CC BY 4.0)
+//   public/tmc/38_1.json  — Netherlands  (NDW VILD, open data)
+//   public/tmc/40_49.json — Norway       (Statens vegvesen V.9.2, NLOD)
+//
+// To regenerate local data, run the scripts in scripts/:
+//   bash scripts/convert-ltef.sh <DATA_DIR> <OUTPUT>  (generic LTEF converter)
+//   bash scripts/convert-finland.sh                    (Finland — Digitraffic API)
+//   bash scripts/convert-ndw.sh                        (Netherlands — NDW WFS)
 // ============================================================================
 
+// -- Local JSON file cache ---------------------------------------------------
+// Loaded on-demand per country and kept in memory for the session.
+
+const localDataCache = new Map<string, Record<string, [number, number, string, number, number]>>();
+const localDataFailed = new Set<string>(); // Track 404s to avoid retrying
+
+export async function lookupLocal(
+  lcds: number[],
+  cid: number,
+  tabcd: number
+): Promise<Map<number, TmcResolvedLocation> | null> {
+  const key = `${cid}_${tabcd}`;
+
+  // Skip if we already know this file doesn't exist
+  if (localDataFailed.has(key)) return null;
+
+  // Load JSON file on first access
+  if (!localDataCache.has(key)) {
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}tmc/${key}.json`);
+      if (!response.ok) {
+        localDataFailed.add(key);
+        return null;
+      }
+      const data = await response.json();
+      localDataCache.set(key, data);
+    } catch {
+      localDataFailed.add(key);
+      return null;
+    }
+  }
+
+  const data = localDataCache.get(key)!;
+  const resolved = new Map<number, TmcResolvedLocation>();
+
+  for (const lcd of lcds) {
+    const entry = data[String(lcd)];
+    if (entry) {
+      resolved.set(lcd, {
+        locationCode: lcd,
+        lat: entry[0],
+        lon: entry[1],
+        name: entry[2] || undefined,
+        prevLocationCode: entry[3] || undefined,
+        nextLocationCode: entry[4] || undefined,
+        status: 'resolved'
+      });
+    }
+  }
+
+  return resolved;
+}
+
+export function clearLocalDataCache(): void {
+  localDataCache.clear();
+  localDataFailed.clear();
+}
+
 // -- Overpass API Endpoints (mirrors) ----------------------------------------
+// Fallback when no local data is available.
 // Add more mirrors here if the existing ones are unreliable.
-// They are tried in round-robin fashion on retries.
 
 export interface OverpassEndpoint {
   name: string;
@@ -28,7 +99,7 @@ export const OVERPASS_ENDPOINTS: OverpassEndpoint[] = [
   { name: 'Kumi Systems',  url: 'https://overpass.kumi.systems/api/interpreter' },
 ];
 
-// -- Query Strategies --------------------------------------------------------
+// -- Overpass Query Strategies -----------------------------------------------
 // Each strategy knows how to build an Overpass query and parse the response.
 // They are tried in order until one returns results.
 
@@ -119,7 +190,7 @@ export const TMC_QUERY_STRATEGIES: TmcQueryStrategy[] = [
   },
 
   // -------------------------------------------------------------------
-  // To add a new strategy, copy a block above and modify:
+  // To add a new Overpass strategy, copy a block above and modify:
   //   name:          A descriptive label (shown in console logs)
   //   buildQuery:    Return an Overpass QL query string
   //   parseResponse: Extract TmcResolvedLocation entries from elements

@@ -4,6 +4,8 @@ import {
   TMC_QUERY_STRATEGIES,
   TMC_SERVICE_CONFIG,
   OverpassElement,
+  lookupLocal,
+  clearLocalDataCache,
 } from '../config/tmcSources';
 
 interface OverpassResponse {
@@ -16,6 +18,9 @@ const pendingResolutions = new Set<string>();
 
 // Known working strategy index per country: key = "cid:tabcd"
 const strategyCache = new Map<string, number>();
+
+// Track whether local data was found for a country
+const localDataAvailable = new Map<string, boolean>();
 
 let lastQueryTime = 0;
 let activeEndpoint = 0;
@@ -81,8 +86,8 @@ async function queryOverpass(query: string): Promise<OverpassResponse> {
   throw lastError || new Error('Overpass API failed after retries');
 }
 
-// Try all configured strategies, return results from whichever works first
-async function queryBatchAutoDetect(
+// Try all configured Overpass strategies, return results from whichever works first
+async function queryBatchOverpass(
   lcds: number[],
   cid: number,
   tabcd: number
@@ -90,7 +95,6 @@ async function queryBatchAutoDetect(
   const key = `${cid}:${tabcd}`;
   const knownIndex = strategyCache.get(key);
 
-  // If we already know which strategy works, use it directly
   if (knownIndex !== undefined) {
     const strategy = TMC_QUERY_STRATEGIES[knownIndex];
     const query = strategy.buildQuery(lcds, cid, tabcd);
@@ -98,7 +102,6 @@ async function queryBatchAutoDetect(
     return strategy.parseResponse(data.elements, cid, tabcd);
   }
 
-  // Try each strategy in order
   for (let i = 0; i < TMC_QUERY_STRATEGIES.length; i++) {
     const strategy = TMC_QUERY_STRATEGIES[i];
     try {
@@ -138,6 +141,31 @@ export async function resolveLocations(
 
   if (unresolvedCodes.length === 0) return results;
 
+  // For local data, we can resolve all at once (no batching needed)
+  const key = `${cid}:${tabcd}`;
+  if (localDataAvailable.get(key) !== false) {
+    const localResult = await lookupLocal(unresolvedCodes, cid, tabcd);
+    if (localResult !== null) {
+      localDataAvailable.set(key, true);
+      localResult.forEach((loc, lcd) => {
+        const cacheKey = `${cid}:${tabcd}:${lcd}`;
+        locationCache.set(cacheKey, loc);
+        results.set(lcd, loc);
+      });
+      // Mark codes not in local data as not_found
+      unresolvedCodes.forEach(lcd => {
+        const cacheKey = `${cid}:${tabcd}:${lcd}`;
+        if (!localResult.has(lcd)) {
+          const notFound: TmcResolvedLocation = { locationCode: lcd, lat: 0, lon: 0, status: 'not_found' };
+          locationCache.set(cacheKey, notFound);
+        }
+      });
+      return results;
+    }
+    localDataAvailable.set(key, false);
+  }
+
+  // Fallback: batch queries via Overpass API
   const batches: number[][] = [];
   for (let i = 0; i < unresolvedCodes.length; i += TMC_SERVICE_CONFIG.batchSize) {
     batches.push(unresolvedCodes.slice(i, i + TMC_SERVICE_CONFIG.batchSize));
@@ -148,7 +176,7 @@ export async function resolveLocations(
 
     try {
       await rateLimitWait();
-      const resolved = await queryBatchAutoDetect(batch, cid, tabcd);
+      const resolved = await queryBatchOverpass(batch, cid, tabcd);
 
       resolved.forEach((loc, lcd) => {
         const cacheKey = `${cid}:${tabcd}:${lcd}`;
@@ -181,6 +209,8 @@ export function clearLocationCache(): void {
   locationCache.clear();
   pendingResolutions.clear();
   strategyCache.clear();
+  localDataAvailable.clear();
+  clearLocalDataCache();
 }
 
 export function getCacheSize(): number {

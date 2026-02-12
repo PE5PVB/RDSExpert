@@ -215,7 +215,8 @@ export const ECC_PI_TO_TMC_CID: Record<string, { cid: number; defaultTabcd: numb
     "E1_7": { cid: 30, defaultTabcd: 1, country: "Luxembourg" },
     // ECC E2
     "E2_2": { cid: 10, defaultTabcd: 1, country: "Czech Republic" },
-    "E2_F": { cid: 40, defaultTabcd: 1, country: "Norway" },
+    "E2_6": { cid: 17, defaultTabcd: 1, country: "Finland" },
+    "E2_F": { cid: 40, defaultTabcd: 49, country: "Norway" },
     "E2_3": { cid: 41, defaultTabcd: 1, country: "Poland" },
     "E2_E": { cid: 49, defaultTabcd: 1, country: "Spain" },
     "E2_5": { cid: 47, defaultTabcd: 1, country: "Slovakia" },
