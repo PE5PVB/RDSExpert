@@ -195,6 +195,44 @@ export const LIC_LANGUAGE_MAP: Record<string, string> = {
     "47": "Uzbek", "46": "Vietnamese", "45": "Zulu"
 };
 
+// ECC + PI first nibble → TMC Country ID (CID) and default Table Code (TABCD)
+// Key format: "{ECC}_{PI_first_nibble}" e.g. "E0_6" for Belgium
+// At runtime: use LTN from RDS Group 8A as TABCD if > 0, else defaultTabcd
+export const ECC_PI_TO_TMC_CID: Record<string, { cid: number; defaultTabcd: number; country: string }> = {
+    // ECC E0
+    "E0_1": { cid: 58, defaultTabcd: 1, country: "Germany" },
+    "E0_D": { cid: 58, defaultTabcd: 1, country: "Germany" },
+    "E0_5": { cid: 25, defaultTabcd: 1, country: "Italy" },
+    "E0_6": { cid: 6,  defaultTabcd: 1, country: "Belgium" },
+    "E0_A": { cid: 3,  defaultTabcd: 1, country: "Austria" },
+    "E0_B": { cid: 21, defaultTabcd: 1, country: "Hungary" },
+    // ECC E1
+    "E1_F": { cid: 16, defaultTabcd: 1, country: "France" },
+    "E1_C": { cid: 55, defaultTabcd: 1, country: "United Kingdom" },
+    "E1_9": { cid: 13, defaultTabcd: 1, country: "Denmark" },
+    "E1_4": { cid: 52, defaultTabcd: 1, country: "Switzerland" },
+    "E1_E": { cid: 42, defaultTabcd: 1, country: "Romania" },
+    "E1_7": { cid: 30, defaultTabcd: 1, country: "Luxembourg" },
+    // ECC E2
+    "E2_2": { cid: 10, defaultTabcd: 1, country: "Czech Republic" },
+    "E2_F": { cid: 40, defaultTabcd: 1, country: "Norway" },
+    "E2_3": { cid: 41, defaultTabcd: 1, country: "Poland" },
+    "E2_E": { cid: 49, defaultTabcd: 1, country: "Spain" },
+    "E2_5": { cid: 47, defaultTabcd: 1, country: "Slovakia" },
+    // ECC E3
+    "E3_8": { cid: 38, defaultTabcd: 1, country: "Netherlands" },
+    "E3_E": { cid: 50, defaultTabcd: 1, country: "Sweden" },
+    "E3_2": { cid: 24, defaultTabcd: 1, country: "Ireland" },
+    "E3_C": { cid: 9,  defaultTabcd: 1, country: "Croatia" },
+    "E3_3": { cid: 54, defaultTabcd: 1, country: "Turkey" },
+    // ECC E4
+    "E4_8": { cid: 43, defaultTabcd: 1, country: "Portugal" },
+    "E4_9": { cid: 48, defaultTabcd: 1, country: "Slovenia" },
+    "E4_F": { cid: 7,  defaultTabcd: 1, country: "Bosnia-Herzegovina" },
+    "E4_2": { cid: 14, defaultTabcd: 1, country: "Estonia" },
+    "E4_1": { cid: 36, defaultTabcd: 1, country: "Moldova" },
+};
+
 export const TMC_EVENT_MAP: Record<number, string> = {
     1: "Traffic problem",
     2: "Queuing traffic - Danger of stationary traffic!",

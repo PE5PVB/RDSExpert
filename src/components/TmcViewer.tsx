@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { RdsData, TmcMessage } from '../types';
+import { TmcMap } from './TmcMap';
 
 interface TmcViewerProps {
     data: RdsData;
@@ -13,6 +14,7 @@ interface TmcViewerProps {
 
 export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onToggle, onPause, onReset }) => {
     const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
+    const [showMap, setShowMap] = useState<boolean>(false);
     
     // Determine status of TMC service
     const statusLabel = data.hasTmc ? "SERVICE DETECTED" : "NO SERVICE DETECTED";
@@ -47,8 +49,16 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
                     <button onClick={onReset} disabled={!active && data.tmcMessages.length === 0} className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 hover:text-white disabled:opacity-30 transition-colors">
                        Reset
                     </button>
-                    
-                    <button 
+
+                    <button
+                        onClick={() => setShowMap(true)}
+                        disabled={!active || data.tmcMessages.length === 0}
+                        className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-30 disabled:text-slate-400 transition-colors flex items-center gap-1"
+                    >
+                        <i className="fa-solid fa-map-location-dot"></i> Map
+                    </button>
+
+                    <button
                         onClick={onPause} 
                         disabled={!active}
                         className={`px-3 py-1 text-[10px] uppercase font-bold rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${paused ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/50 hover:bg-yellow-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
@@ -169,6 +179,15 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
                    TMC Decoder is not currently enabled. Click "Start" to visualize Group 8A messages.
                 </div>
             )}
+
+            <TmcMap
+                messages={data.tmcMessages}
+                serviceInfo={data.tmcServiceInfo}
+                ecc={data.ecc}
+                pi={data.pi}
+                isOpen={showMap}
+                onClose={() => setShowMap(false)}
+            />
         </div>
     );
 };

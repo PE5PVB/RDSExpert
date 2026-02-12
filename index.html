@@ -15,6 +15,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
       body {
         font-family: 'Inter', sans-serif;
@@ -46,6 +48,24 @@
       .no-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
+      }
+      /* TMC Map - Leaflet popup dark theme */
+      .tmc-popup .leaflet-popup-content-wrapper {
+        background: #1e293b;
+        color: #e2e8f0;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      }
+      .tmc-popup .leaflet-popup-tip {
+        background: #1e293b;
+        border: 1px solid #334155;
+      }
+      .tmc-popup .leaflet-popup-close-button {
+        color: #94a3b8;
+      }
+      .tmc-popup .leaflet-popup-close-button:hover {
+        color: #e2e8f0;
       }
     </style>
   <script type="importmap">
