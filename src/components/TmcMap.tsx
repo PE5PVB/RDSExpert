@@ -112,7 +112,7 @@ export const TmcMap: React.FC<TmcMapProps> = ({
       setDataAvailable(availability);
 
       if (availability === 'none') {
-        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Currently only Germany has comprehensive TMC data in OSM.`);
+        setError(`No TMC location data found in OpenStreetMap for this country (CID:${cid}, TABCD:${tabcd}). Not all countries have TMC locations imported into OSM.`);
         setLoading(false);
         return;
       }
