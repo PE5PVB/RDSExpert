@@ -20,6 +20,7 @@ No test framework, linter, or formatter is configured.
 - **TypeScript 5** in strict mode
 - **Vite 4** as build tool and dev server
 - **Tailwind CSS** loaded via CDN in `index.html` (not via PostCSS/npm)
+- **Leaflet 1.9** for TMC traffic map (via CDN, declared as `any`)
 - **jsPDF** for PDF export functionality
 - **Font Awesome 6** icons via CDN
 - Fonts: JetBrains Mono (monospace displays), Inter (UI text)
@@ -62,15 +63,27 @@ A custom `RDS_G2_MAP` character table maps RDS character codes to Unicode.
 | `InfoGrid.tsx` | Alternative Frequencies (Method A cumulative / Method B grouped) and EON network data |
 | `GroupAnalyzer.tsx` | Real-time RDS group stream with color coding, hex view, and group count statistics |
 | `TmcViewer.tsx` | TMC message list/detail view with pause/resume (max 500 messages) |
+| `TmcMap.tsx` | Interactive Leaflet map modal plotting TMC messages with color-coded markers |
 | `HistoryControls.tsx` | PS/RT history (last 14 entries), PDF export, bandscan recording with metadata |
+
+### TMC Map & Location Resolution
+
+The TMC viewer includes an interactive map (Leaflet via CDN) that plots traffic messages on OpenStreetMap. Location codes are resolved to coordinates via the Overpass API.
+
+Configuration lives in `src/config/tmcSources.ts`:
+- `OVERPASS_ENDPOINTS` — Overpass API mirror URLs (tried in round-robin on failure)
+- `TMC_QUERY_STRATEGIES` — Query formats with `buildQuery` and `parseResponse` (tried in order; first with results wins and is cached per country)
+- `TMC_SERVICE_CONFIG` — Batch size, rate limiting, timeouts, retries
+
+Country detection uses `ECC_PI_TO_TMC_CID` in `constants.ts` to map ECC+PI to TMC Country ID (CID). Falls back to manual country selection if ECC is unavailable.
 
 ### Constants (constants.ts, ~26K lines)
 
-Large lookup tables: ODA application IDs, ECC country codes, LIC language codes. This file is intentionally large — it contains reference data needed for RDS decoding.
+Large lookup tables: ODA application IDs, ECC country codes, LIC language codes, ECC-to-TMC CID mapping. This file is intentionally large — it contains reference data needed for RDS decoding.
 
 ### Types (types.ts)
 
-All TypeScript interfaces and enums: `RdsData`, `BandscanEntry`, `EonNetwork`, `TmcMessage`, `RtPlusTag`, `ConnectionStatus`, PTY arrays (RDS/RBDS/Combined).
+All TypeScript interfaces and enums: `RdsData`, `BandscanEntry`, `EonNetwork`, `TmcMessage`, `TmcResolvedLocation`, `RtPlusTag`, `ConnectionStatus`, PTY arrays (RDS/RBDS/Combined).
 
 ## Deployment
 
