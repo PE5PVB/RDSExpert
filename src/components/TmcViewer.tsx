@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { RdsData, TmcMessage } from '../types';
 
@@ -64,22 +63,26 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
 
             {/* 2. Service Info Bar (Dark Style) - Only visible when Active */}
             {active && (
-                <div className="bg-slate-900 text-slate-300 text-xs font-mono border-b border-slate-700 flex items-center p-1 px-4 gap-8 shadow-inner">
-                     <div className="flex items-center gap-1">
-                         <span className="font-bold text-slate-500">LTN:</span>
-                         <span className="font-bold">{data.tmcServiceInfo.ltn || "--"}</span>
+                <div className="bg-slate-900 border-b border-slate-700 flex flex-wrap items-center p-1 px-4 gap-y-1 gap-x-8 shadow-inner overflow-x-auto no-scrollbar">
+                     <div className="flex items-center gap-1 shrink-0">
+                         <span className="text-xs font-bold text-slate-500 font-mono uppercase">Provider Name:</span>
+                         <span className="text-xs font-bold text-white font-mono uppercase">{data.tmcServiceInfo.providerName}</span>
                      </div>
-                     <div className="flex items-center gap-1">
-                         <span className="font-bold text-slate-500">SID:</span>
-                         <span className="font-bold">{data.tmcServiceInfo.sid || "--"}</span>
+                     <div className="flex items-center gap-1 shrink-0">
+                         <span className="text-xs font-bold text-slate-500 font-mono">LTN:</span>
+                         <span className="text-xs font-bold text-slate-300 font-mono">{data.tmcServiceInfo.ltn || "--"}</span>
                      </div>
-                     <div className="flex items-center gap-1">
-                         <span className="font-bold text-slate-500">Mode:</span>
-                         <span className="font-bold">{data.tmcServiceInfo.mode}</span>
+                     <div className="flex items-center gap-1 shrink-0">
+                         <span className="text-xs font-bold text-slate-500 font-mono">SID:</span>
+                         <span className="text-xs font-bold text-slate-300 font-mono">{data.tmcServiceInfo.sid || "--"}</span>
                      </div>
-                     <div className="flex items-center gap-1 ml-auto">
-                         <span className="font-bold text-slate-500">Unique Messages:</span>
-                         <span className="font-bold">{messagesCountDisplay}</span>
+                     <div className="flex items-center gap-1 shrink-0">
+                         <span className="text-xs font-bold text-slate-500 font-mono">Mode:</span>
+                         <span className="text-xs font-bold text-slate-300 font-mono">{data.tmcServiceInfo.mode}</span>
+                     </div>
+                     <div className="flex items-center gap-1 ml-auto shrink-0">
+                         <span className="text-xs font-bold text-slate-500 font-mono">Unique Messages:</span>
+                         <span className="text-xs font-bold text-slate-300 font-mono">{messagesCountDisplay}</span>
                      </div>
                 </div>
             )}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED, PsHistoryItem, RtHistoryItem, BandscanEntry } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
@@ -157,13 +158,17 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     // 3. Radiotext
     content += `[3] RADIOTEXT\n`;
     content += `-------------\n`;
-    const rtAVal = (data.rtA || "").trim();
-    const rtBVal = (data.rtB || "").trim();
-    if (!rtAVal && !rtBVal) {
+    const rtARaw = (data.rtA || "");
+    const rtBRaw = (data.rtB || "");
+    const isRtActive = (data.groupCounts['2A'] || 0) > 0 || (data.groupCounts['2B'] || 0) > 0;
+
+    if (!isRtActive) {
         content += `No Radiotext detected.\n\n`;
+    } else if (rtARaw.split('').every(c => c === ' ') && rtBRaw.split('').every(c => c === ' ')) {
+        content += `Radiotext enabled but no text decoded.\n\n`;
     } else {
-        content += `Line A:  ${(data.rtA || "")}\n`;
-        content += `Line B:  ${(data.rtB || "")}\n\n`;
+        content += `Line A:  ${rtARaw}\n`;
+        content += `Line B:  ${rtBRaw}\n\n`;
     }
 
     // 4. AF
@@ -223,7 +228,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
     content += `--------------------------------\n`;
     if (data.odaList.length > 0) {
         data.odaList.forEach(oda => {
-            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}\n`;
+            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}${oda.extra || ""}\n`;
         });
     } else {
         content += `  No ODA AID detected on Group 3A.\n`;
@@ -288,7 +293,6 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
             const currentPtyValue = ptyList[h.pty] || h.pty.toString();
             if (currentPtyValue !== lastPtyValue) {
                 content += `[${h.time}] ${currentPtyValue}\n`;
-                /* Fix: Corrected variable name from 'lastPty' to 'lastPtyValue'. */
                 lastPtyValue = currentPtyValue;
             }
         });
@@ -306,7 +310,6 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
             const currentPtyn = h.ptyn;
             if (currentPtyn !== lastPtynValue) {
                 content += `[${h.time}] ${currentPtyn}\n`;
-                /* Fix: Corrected variable name from 'lastPtyn' to 'lastPtynValue'. */
                 lastPtynValue = currentPtyn;
             }
         });
@@ -515,7 +518,6 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                         const currentPtyn = item.ptyn;
                         if (currentPtyn !== lastPtynValueLocal) {
                             ptynLines += `[${item.time}] ${currentPtyn}\n`;
-                            /* Fix: Corrected variable name. */
                             lastPtynValueLocal = currentPtyn;
                         }
                     });
@@ -547,6 +549,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                 emptyMessage="No PS / PTY / PTYN data recorded for now."
                 copyReverse={true}
                 allowUnderscoreToggle={true}
+                storageKey="rds_history_ps_underscores"
             />
         )}
 
@@ -556,7 +559,13 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                 title="RADIOTEXT HISTORY (LIMITED TO 200 ENTRIES)"
                 onClose={() => setShowRtHistory(false)}
                 data={data.rtHistory}
-                getCopyText={(item: RtHistoryItem) => `[${item.time}] ${item.text}`}
+                getCopyText={(item: RtHistoryItem) => {
+                    const formattedText = item.text.split('').map(char => {
+                        const code = char.charCodeAt(0);
+                        return code < 32 ? `<${code.toString(16).toUpperCase().padStart(2, '0')}>` : char;
+                    }).join('');
+                    return `[${item.time}] ${formattedText}`;
+                }}
                 renderHeader={() => (
                     <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
                         <th className="p-3 w-24">Time</th>
@@ -566,7 +575,20 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                 renderRow={(item: RtHistoryItem, i) => (
                     <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                         <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
-                        <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">{item.text}</td>
+                        <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">
+                            {item.text.split('').map((char, idx) => {
+                                const code = char.charCodeAt(0);
+                                if (code < 32) {
+                                    const hex = code.toString(16).toUpperCase().padStart(2, '0');
+                                    return (
+                                        <span key={idx} className="inline-block text-[0.6em] align-middle text-slate-500 font-bold bg-slate-900/50 rounded px-0.5 mx-px border border-slate-700 select-none">
+                                            &lt;{hex}&gt;
+                                        </span>
+                                    );
+                                }
+                                return char;
+                            })}
+                        </td>
                     </tr>
                 )}
                 emptyMessage="No complete Radiotext messages recorded for now."
@@ -629,13 +651,26 @@ interface HistoryViewerProps<T> {
     emptyMessage: string;
     copyReverse?: boolean;
     allowUnderscoreToggle?: boolean;
+    storageKey?: string;
 }
 
-const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, fullCopyFormatter, emptyMessage, copyReverse, allowUnderscoreToggle }: HistoryViewerProps<T>) => {
+const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, fullCopyFormatter, emptyMessage, copyReverse, allowUnderscoreToggle, storageKey }: HistoryViewerProps<T>) => {
     const [paused, setPaused] = useState(false);
     const [frozenData, setFrozenData] = useState<T[]>([]);
     const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
-    const [useUnderscores, setUseUnderscores] = useState(true);
+    const [useUnderscores, setUseUnderscores] = useState(() => {
+        if (storageKey) {
+            const saved = localStorage.getItem(storageKey);
+            return saved !== null ? saved === 'true' : true;
+        }
+        return true;
+    });
+
+    useEffect(() => {
+        if (storageKey) {
+            localStorage.setItem(storageKey, useUnderscores.toString());
+        }
+    }, [useUnderscores, storageKey]);
 
     const displayData = paused ? frozenData : data;
 
@@ -725,8 +760,7 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
     );
 
     return (
-        /* Fix: Use HistoryModal instead of HistoryViewer recursively to avoid stack overflow. */
-        <HistoryModal title={title} onClose={onClose} actions={actions}>
+        <HistoryViewerWrapper title={title} onClose={onClose} actions={actions}>
             <table className="w-full text-left text-sm font-mono">
                 <thead>
                     {renderHeader()}
@@ -738,11 +772,11 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
                     )}
                 </tbody>
             </table>
-        </HistoryModal>
+        </HistoryViewerWrapper>
     );
 };
 
-const HistoryModal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
+const HistoryViewerWrapper: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
@@ -772,10 +806,14 @@ const HistoryModal: React.FC<{ title: string, onClose: () => void, children: Rea
 const ExportModal: React.FC<{ title: string, content: string, pi: string, onClose: () => void, bandscanEntries?: BandscanEntry[], formatFreq?: (f: string) => string, serverName?: string }> = ({ title, content, pi, onClose, bandscanEntries, formatFreq, serverName }) => {
     const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
     
-    // States for optional history inclusion (disabled by default)
-    const [includeRtHistory, setIncludeRtHistory] = useState(false);
-    const [includePsHistory, setIncludePsHistory] = useState(false);
-    const [signalUnit, setSignalUnit] = useState<'dBf' | 'dBuV'>('dBf');
+    // States for optional history inclusion
+    const [includeRtHistory, setIncludeRtHistory] = useState(() => localStorage.getItem('rds_export_rt_history') === 'true');
+    const [includePsHistory, setIncludePsHistory] = useState(() => localStorage.getItem('rds_export_ps_history') === 'true');
+    const [signalUnit, setSignalUnit] = useState<'dBf' | 'dBuV'>(() => (localStorage.getItem('rds_signal_unit') as 'dBf' | 'dBuV') || 'dBf');
+
+    useEffect(() => { localStorage.setItem('rds_export_rt_history', includeRtHistory.toString()); }, [includeRtHistory]);
+    useEffect(() => { localStorage.setItem('rds_export_ps_history', includePsHistory.toString()); }, [includePsHistory]);
+    useEffect(() => { localStorage.setItem('rds_signal_unit', signalUnit); }, [signalUnit]);
 
     // Filter report content based on checkboxes and unit preference
     const getFilteredReport = (rawContent: string) => {
@@ -795,8 +833,14 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             });
         }
         
-        // Nettoyage des retours chariots techniques (\r) pour éviter les sauts de ligne indésirables dans le textarea de l'aperçu
-        filtered = filtered.replace(/\r/g, '');
+        // Transform control characters (except \n) into readable <XX> technical codes for preview and TXT export
+        filtered = filtered.split('').map(char => {
+            const code = char.charCodeAt(0);
+            if (code < 32 && code !== 10) { // Preserve \n (Line Feed)
+                return `<${code.toString(16).toUpperCase().padStart(2, '0')}>`;
+            }
+            return char;
+        }).join('');
 
         return filtered.trim();
     };
@@ -1238,7 +1282,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             let detailY = 62;
             let historyPageStarted = false; 
             const sourceReport = entry.rdsReport || content;
-            // Pour le PDF, on gère les filtres d'historique séparément pour conserver les caractères \r nécessaires à l'affichage des codes
+            // Pour le PDF, on gère les filtres d'historique séparément pour conserver les caractères originaux nécessaires au dessin des cases
             let pdfSource = sourceReport;
             if (!includeRtHistory) pdfSource = pdfSource.replace(/\[9\] RADIOTEXT HISTORY[\s\S]*?(?=\[10\]|={20,}|$)/g, "");
             if (!includePsHistory) pdfSource = pdfSource.replace(/\[10\] PS \/ PTY \/ PTYN HISTORY[\s\S]*?(?=={20,}|$)/g, "");
@@ -1291,7 +1335,6 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                     if (colonIdx !== -1 && !isHistoryLine && !isBulletLine && !isNoFormatSection) {
                         const label = line.substring(0, colonIdx + 1);
                         const valueRaw = line.substring(colonIdx + 1);
-                        /* Fix: Adjusted to allow reassignment for dynamic PS sequence logic. */
                         let value = sectionTitle.includes('[3]') ? valueRaw.substring(2) : valueRaw.trim();
                         
                         // --- DYNAMIC PS SEQUENCE LOGIC (PDF DETAILED PAGES ONLY) ---
@@ -1372,17 +1415,21 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                         doc.setFont("helvetica", "normal");
                         doc.setTextColor(0, 0, 0);
                         
-                        const wrappedLine = doc.splitTextToSize(line, 180);
-                        wrappedLine.forEach((lLine: string, lIdxWrapped: number) => {
-                            if (lIdxWrapped > 0) {
-                                detailY += 5;
-                                if (detailY > 280 && (lIdxWrapped < wrappedLine.length - 1 || lIdx < lines.length - 1 || sIdx < sections.length - 1)) {
-                                    doc.addPage();
-                                    detailY = 20;
+                        if (sectionTitle.includes('[9]')) {
+                            drawTextWithCodes(line, 15, detailY, 9);
+                        } else {
+                            const wrappedLine = doc.splitTextToSize(line, 180);
+                            wrappedLine.forEach((lLine: string, lIdxWrapped: number) => {
+                                if (lIdxWrapped > 0) {
+                                    detailY += 5;
+                                    if (detailY > 280 && (lIdxWrapped < wrappedLine.length - 1 || lIdx < lines.length - 1 || sIdx < sections.length - 1)) {
+                                        doc.addPage();
+                                        detailY = 20;
+                                    }
                                 }
-                            }
-                            doc.text(lLine, 15, detailY);
-                        });
+                                doc.text(lLine, 15, detailY);
+                            });
+                        }
                     }
                     detailY += 5;
                     if (detailY > 280 && (lIdx < lines.length - 1 || sIdx < sections.length - 1)) {

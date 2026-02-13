@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { RdsData } from '../types';
 import { ODA_MAP } from '../constants';
@@ -205,12 +206,15 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
   const [frozenSequence, setFrozenSequence] = useState<string[]>([]);
 
   // Hex Viewer State
-  const [hexCols, setHexCols] = useState<string[]>(["0A", "2A", "3A", "15A"]);
+  const [hexCols, setHexCols] = useState<string[]>(() => {
+      const saved = localStorage.getItem('rds_hex_cols');
+      return saved ? JSON.parse(saved) : ["0A", "2A", "3A", "15A"];
+  });
   // Use stable objects with IDs for logs to prevent rendering artifacts/jumping
   const [hexLogs, setHexLogs] = useState<Record<number, LogItem[]>>({ 0: [], 1: [], 2: [], 3: [] });
 
   // Detailed Viewer State
-  const [detailGroup, setDetailGroup] = useState<string>("0A");
+  const [detailGroup, setDetailGroup] = useState<string>(() => localStorage.getItem('rds_detail_group') || "0A");
   const [detailLogs, setDetailLogs] = useState<LogItem[]>([]);
 
   // ODA Detection State
@@ -220,6 +224,14 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
 
   // Unique ID generator for log items
   const logIdCounter = useRef<number>(0);
+
+  useEffect(() => {
+      localStorage.setItem('rds_hex_cols', JSON.stringify(hexCols));
+  }, [hexCols]);
+
+  useEffect(() => {
+      localStorage.setItem('rds_detail_group', detailGroup);
+  }, [detailGroup]);
 
   // Helper to ensure scroll happens after paint
   const scrollToBottom = (element: HTMLElement | null) => {

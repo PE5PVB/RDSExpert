@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED } from '../types';
 
 interface InfoGridProps {
@@ -7,9 +7,13 @@ interface InfoGridProps {
 }
 
 export const InfoGrid: React.FC<InfoGridProps> = ({ data }) => {
-  const [sortAf, setSortAf] = useState(false);
+  const [sortAf, setSortAf] = useState(() => localStorage.getItem('rds_sort_af') === 'true');
   const [expandedHeader, setExpandedHeader] = useState<string | null>(null);
   const [expandedEon, setExpandedEon] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('rds_sort_af', sortAf.toString());
+  }, [sortAf]);
 
   // Method B Logic
   const methodBHeaders = Object.keys(data.afBLists).sort((a, b) => parseFloat(a) - parseFloat(b));

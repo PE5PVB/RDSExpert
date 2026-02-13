@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED } from '../types';
 import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
 
@@ -10,7 +11,11 @@ interface LcdDisplayProps {
 type UnderscoreMode = 'OFF' | 'RT_PROGRESSIVE' | 'ALL' | 'PS_ONLY' | 'RT_ONLY';
 
 export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
-  const [underscoreMode, setUnderscoreMode] = useState<UnderscoreMode>('OFF');
+  const [underscoreMode, setUnderscoreMode] = useState<UnderscoreMode>(() => (localStorage.getItem('rds_underscore_mode') as UnderscoreMode) || 'OFF');
+  
+  useEffect(() => {
+    localStorage.setItem('rds_underscore_mode', underscoreMode);
+  }, [underscoreMode]);
   
   // State for ECC Tooltip
   const [showEccTooltip, setShowEccTooltip] = useState(false);
@@ -22,6 +27,28 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
 
   // State for PTYN Flag Tooltip
   const [showPtynTooltip, setShowPtynTooltip] = useState(false);
+
+  // State for RT A/B Tooltips
+  const [showRtATooltip, setShowRtATooltip] = useState(false);
+  const [showRtBTooltip, setShowRtBTooltip] = useState(false);
+  const rtAVersionRef = useRef<string | null>(null);
+  const rtBVersionRef = useRef<string | null>(null);
+
+  // Reset RT version detection if data is reset (new station)
+  if (data.groupTotal === 0) {
+    rtAVersionRef.current = null;
+    rtBVersionRef.current = null;
+  }
+
+  // Detect current RT type for A and B independently from recent groups
+  data.recentGroups.forEach(g => {
+    if (g.type === '2A' || g.type === '2B') {
+      const ver = g.type === '2A' ? "64 char." : "32 char.";
+      const isB = !!((g.blocks[1] >> 4) & 0x01);
+      if (isB) rtBVersionRef.current = ver;
+      else rtAVersionRef.current = ver;
+    }
+  });
 
   // Cycle through modes according to user request: 
   // OFF -> RT_PROGRESSIVE -> ALL -> PS_ONLY -> RT_ONLY -> OFF
@@ -279,7 +306,15 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
         {/* Radio Text A */}
         <div className={`flex flex-col md:flex-row items-start md:space-x-4 transition-opacity duration-300 ${!data.textAbFlag ? 'opacity-100' : 'opacity-60'}`}>
           <div className="flex flex-row md:flex-col items-center space-x-2 md:space-x-0 md:space-y-2 pt-2 mb-1 md:mb-0">
-             <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center">RT A</span>
+             <div className="relative" onMouseEnter={() => setShowRtATooltip(true)} onMouseLeave={() => setShowRtATooltip(false)}>
+               <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center cursor-default block">RT A</span>
+               {showRtATooltip && rtAVersionRef.current && data.rtA.trim().length > 0 && (
+                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                   {rtAVersionRef.current}
+                   <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+                 </div>
+               )}
+             </div>
              {/* Blue indicator active if flag is A (false) AND Radiotext groups detected */}
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${!data.textAbFlag && hasRtA ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
@@ -295,7 +330,15 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
         {/* Radio Text B */}
         <div className={`flex flex-col md:flex-row items-start md:space-x-4 transition-opacity duration-300 ${data.textAbFlag ? 'opacity-100' : 'opacity-60'}`}>
           <div className="flex flex-row md:flex-col items-center space-x-2 md:space-x-0 md:space-y-2 pt-2 mb-1 md:mb-0">
-            <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center">RT B</span>
+            <div className="relative" onMouseEnter={() => setShowRtBTooltip(true)} onMouseLeave={() => setShowRtBTooltip(false)}>
+              <span className="text-slate-400 font-bold text-xs uppercase shrink-0 px-2 py-1 border border-slate-700 rounded w-16 text-center cursor-default block">RT B</span>
+              {showRtBTooltip && rtBVersionRef.current && data.rtB.trim().length > 0 && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                  {rtBVersionRef.current}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+                </div>
+              )}
+            </div>
              {/* Blue indicator active if flag is B (true) AND Radiotext groups detected */}
              <div className={`w-3 h-3 rounded-full shadow-[0_0_5px_currentColor] border border-black/50 transition-colors duration-200 ${data.textAbFlag && hasRtB ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
           </div>
