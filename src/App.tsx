@@ -83,12 +83,14 @@ interface DecoderState {
   odaApp: { 
     name: string; 
     aid: string; 
-    group: string 
+    group: string;
+    extra?: string;
   } | undefined;
   odaList: { 
     name: string; 
     aid: string; 
-    group: string 
+    group: string;
+    extra?: string;
   }[];
   hasRtPlus: boolean;
   hasEon: boolean;
@@ -96,6 +98,7 @@ interface DecoderState {
   eonMap: Map<string, EonNetwork>; 
   tmcServiceInfo: TmcServiceInfo;
   tmcBuffer: TmcMessage[]; 
+  tmcProviderBuffer: string[];
   
   // Analyzer State
   groupCounts: Record<string, number>;
@@ -126,6 +129,11 @@ interface DecoderState {
   // Bandscan
   isRecording: boolean;
   bandscanEntries: BandscanEntry[];
+  frequencyStartTime: number;
+
+  // DAB Cross-Referencing tracking
+  dabTargetGroup: string | null;
+  dabExtraInfo: string;
 }
 
 // --- RDS Character Set Mapping (Custom Super-Hybrid Table) ---
@@ -266,6 +274,19 @@ const RDS_G2_MAP: Record<number, string> = {
   0xFD: 'ź', 
   0xFE: 'ŧ', 
   0xFF: 'ÿ'
+};
+
+const DAB_CHANNELS: Record<string, string> = {
+    "174.928": "5A", "176.640": "5B", "178.352": "5C", "180.064": "5D",
+    "181.936": "6A", "183.648": "6B", "185.360": "6C", "187.072": "6D",
+    "188.928": "7A", "190.640": "7B", "192.352": "7C", "194.064": "7D",
+    "195.936": "8A", "197.648": "8B", "199.360": "8C", "201.072": "8D",
+    "202.928": "9A", "204.640": "9B", "206.352": "9C", "208.064": "9D",
+    "209.936": "10A", "211.648": "10B", "213.360": "10C", "215.072": "10D",
+    "216.928": "11A", "218.640": "11B", "220.352": "11C", "222.064": "11D",
+    "223.936": "12A", "225.648": "12B", "227.360": "12C", "229.072": "12D",
+    "230.784": "13A", "232.496": "13B", "234.208": "13C", "235.776": "13D",
+    "237.488": "13E", "239.200": "13F"
 };
 
 const RT_PLUS_LABELS: Record<number, string> = {
@@ -487,10 +508,11 @@ const App: React.FC = () => {
   const BER_WINDOW_SIZE = 40; 
   const GRACE_PERIOD_PACKETS = 10; 
 
-  // --- Bandscan State ---
+  // --- Bandscan Capture Logic ---
   const lastApiDataRef = useRef<any>(null);
   const apiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Decoder State Ref
   const decoderState = useRef<DecoderState>({
     psBuffer: new Array(8).fill(' '),  
     psMask: new Array(8).fill(false),
@@ -502,6 +524,7 @@ const App: React.FC = () => {
     rtMask1: new Array(64).fill(false),
     rtCandidateString: "",
     rtStableSince: 0,
+
     afSet: [], 
     afListHead: null, 
     lastGroup0A3: null,
@@ -526,10 +549,8 @@ const App: React.FC = () => {
     diCompressed: false,
     diDynamicPty: false,
     abFlag: false,
-    // Fix: Initializing property with value null instead of type number | null
     rtPlusOdaGroup: null,
-    rtPlusTags: new Map(), 
-    /* Fix: Corrected syntax by replacing types with initial values in decoderState object literal. */
+    rtPlusTags: new Map(),
     rtPlusItemRunning: false,
     rtPlusItemToggle: false,
     hasOda: false,
@@ -544,18 +565,17 @@ const App: React.FC = () => {
       sid: 0, 
       afi: false, 
       mode: 0, 
-      providerName: "[Unavailable]" 
+      providerName: "[Identifying...]" 
     },
     tmcBuffer: [], 
+    tmcProviderBuffer: new Array(16).fill(' '),
     
     // Analyzer State
-    // Fix: Initializing property with empty object instead of type Record
     groupCounts: {},
     groupTotal: 0,
     groupSequence: [],
     
     graceCounter: GRACE_PERIOD_PACKETS,
-    /* Fix: Corrected syntax by replacing 'boolean' type name with value 'false'. */
     isDirty: false,
     
     // Raw Buffer for Hex Viewer
@@ -563,8 +583,7 @@ const App: React.FC = () => {
 
     // History Tracking Logic
     piEstablishmentTime: 0, 
-    // Fix: Initializing property with value false instead of type boolean
-    psHistoryLogged: false, 
+    psHistoryLogged: false,
     
     // Stability Check for PS History
     psCandidateString: "        ",
@@ -579,7 +598,12 @@ const App: React.FC = () => {
 
     // Bandscan
     isRecording: false,
-    bandscanEntries: []
+    bandscanEntries: [],
+    frequencyStartTime: Date.now(),
+
+    // DAB Cross-Referencing tracking
+    dabTargetGroup: null,
+    dabExtraInfo: ""
   });
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
@@ -663,6 +687,7 @@ const App: React.FC = () => {
     content += `[2] FLAGS / DECODER IDENTIFICATION (DI) / CLOCK TIME (CT) / PIN\n`;
     content += `---------------------------------------------------------------\n`;
     content += `Flags:        TP = ${state.tp ? '1' : '0'} | TA = ${state.ta ? '1' : '0'} | MS = ${state.ms ? 'Music' : 'Speech'}\n`;
+    // Fix: use diStereo instead of stereo in DecoderState
     content += `DI:           Stereo = ${state.diStereo ? '1' : '0'} | Artificial Head = ${state.diArtificialHead ? '1' : '0'} | Compressed = ${state.diCompressed ? '1' : '0'} | Dynamic PTY = ${state.diDynamicPty ? '1' : '0'}\n`;
     content += `Local Time:   ${state.localTime || "N/A"}\n`;
     content += `UTC Time:     ${state.utcTime || "N/A"}\n`;
@@ -670,13 +695,17 @@ const App: React.FC = () => {
 
     content += `[3] RADIOTEXT\n`;
     content += `-------------\n`;
-    const rtAVal = renderRdsBuffer(state.rtBuffer0).trim();
-    const rtBVal = renderRdsBuffer(state.rtBuffer1).trim();
-    if (!rtAVal && !rtBVal) {
+    const rtARaw = renderRdsBuffer(state.rtBuffer0);
+    const rtBRaw = renderRdsBuffer(state.rtBuffer1);
+    const isRtActive = (state.groupCounts['2A'] || 0) > 0 || (state.groupCounts['2B'] || 0) > 0;
+
+    if (!isRtActive) {
         content += `No Radiotext detected.\n\n`;
+    } else if (rtARaw.split('').every(c => c === ' ') && rtBRaw.split('').every(c => c === ' ')) {
+        content += `Radiotext enabled but no text decoded.\n\n`;
     } else {
-        content += `Line A:  ${renderRdsBuffer(state.rtBuffer0)}\n`;
-        content += `Line B:  ${(renderRdsBuffer(state.rtBuffer1))}\n\n`;
+        content += `Line A:  ${rtARaw}\n`;
+        content += `Line B:  ${rtBRaw}\n\n`;
     }
 
     content += `[4] ALTERNATIVE FREQUENCIES (AF)\n`;
@@ -727,7 +756,7 @@ const App: React.FC = () => {
     content += `--------------------------------\n`;
     if (state.odaList.length > 0) {
         state.odaList.forEach(oda => {
-            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}\n`;
+            content += `  - ${oda.name} [AID: ${oda.aid}] on Group ${oda.group}${oda.extra || ""}\n`;
         });
     } else {
         content += `  No ODA AID detected on Group 3A.\n`;
@@ -980,6 +1009,7 @@ const App: React.FC = () => {
     state.currentMethodBGroup = null;
     state.eonMap.clear();
     state.tmcBuffer = [];
+    state.tmcProviderBuffer.fill(' ');
     state.rtPlusTags.clear();
 
     state.rtPlusItemRunning = false;
@@ -1009,7 +1039,7 @@ const App: React.FC = () => {
     state.rtPlusOdaGroup = null;
     state.lastGroup0A3 = null;
     state.afType = 'Unknown';
-    state.tmcServiceInfo = { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Unavailable]" };
+    state.tmcServiceInfo = { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Identifying...]" };
 
     state.groupCounts = {};
     state.groupTotal = 0;
@@ -1027,6 +1057,10 @@ const App: React.FC = () => {
     berHistoryRef.current = [];
     state.graceCounter = GRACE_PERIOD_PACKETS;
     state.rawGroupBuffer = [];
+    state.frequencyStartTime = Date.now();
+
+    state.dabTargetGroup = null;
+    state.dabExtraInfo = "";
     
     state.isDirty = true;
   }, []);
@@ -1064,6 +1098,7 @@ const App: React.FC = () => {
         state.currentMethodBGroup = null;
         state.eonMap.clear();
         state.tmcBuffer = [];
+        state.tmcProviderBuffer.fill(' ');
         state.rtPlusTags.clear();
         state.rtPlusItemRunning = false;
         state.rtPlusItemToggle = false;
@@ -1097,7 +1132,7 @@ const App: React.FC = () => {
           sid: 0, 
           afi: false, 
           mode: 0, 
-          providerName: "[Unavailable]" 
+          providerName: "[Identifying...]" 
         };
         
         state.groupSequence = [];
@@ -1117,6 +1152,9 @@ const App: React.FC = () => {
         berHistoryRef.current = [];
         state.graceCounter = GRACE_PERIOD_PACKETS;
         
+        state.dabTargetGroup = null;
+        state.dabExtraInfo = "";
+
         // --- Trigger API metadata fetch when PI changes during Bandscan recording ---
         if (state.isRecording) {
             if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
@@ -1146,6 +1184,23 @@ const App: React.FC = () => {
         state.groupSequence.splice(0, 1000);
       }
     }
+
+    // --- DAB Cross-Referencing Data Decoding (AID 0093) ---
+    if (state.dabTargetGroup && groupStr === state.dabTargetGroup) {
+      const eid = g4.toString(16).toUpperCase().padStart(4, '0');
+      const freqK = g3 * 16;
+      const freqM = (freqK / 1000).toFixed(3);
+      const channel = DAB_CHANNELS[freqM] || "??";
+      const info = ` -> EID = ${eid} / Channel = ${channel}`;
+      if (state.dabExtraInfo !== info) {
+        state.dabExtraInfo = info;
+        const idx = state.odaList.findIndex(o => o.aid === '0093');
+        if (idx !== -1) {
+          state.odaList[idx].extra = info;
+          state.isDirty = true;
+        }
+      }
+    }
     
     state.tp = tp;
     state.pty = pty;
@@ -1172,7 +1227,7 @@ const App: React.FC = () => {
         if (piEstablishedForArchive && state.currentPi !== "----") {
             if (currentPsForArchive === state.psValidationBuffer) {
                 const last = state.psHistoryBuffer[0];
-                const hasContent = !state.psHistoryLogged ? state.psMask.every(m => m) : currentPsForArchive.trim().length > 0;
+                const hasContent = !state.psHistoryLogged ? (state.psMask.every(m => m) && currentPsForArchive.trim().length > 0) : true;
                 
                 if (hasContent) {
                     if (!last || last.ps !== currentPsForArchive || last.pty !== state.pty) { 
@@ -1285,18 +1340,31 @@ const App: React.FC = () => {
       state.hasTmc = true;
       if (tmcActiveRef.current && !tmcPausedRef.current) {
         const tuningFlag = (g2 >> 4) & 0x01;
+        const variant = g2 & 0x0F;
         
         if (tuningFlag === 1) {
-          const ltn = (g3 >> 10) & 0x3F;
-          const sid = (g3 >> 2) & 0x3F;
-          if (ltn > 0 || sid > 0) {
-            state.tmcServiceInfo = {
-              ...state.tmcServiceInfo,
-              ltn: ltn,
-              sid: sid,
-              afi: !!((g3 >> 9) & 0x01),
-              mode: (g3 >> 8) & 0x01
-            };
+          if (variant === 0 || variant === 1) {
+            const ltn = (g3 >> 10) & 0x3F;
+            const sid = (g3 >> 2) & 0x3F;
+            if (ltn > 0 || sid > 0) {
+              state.tmcServiceInfo = {
+                ...state.tmcServiceInfo,
+                ltn: ltn,
+                sid: sid,
+                afi: !!((g3 >> 9) & 0x01),
+                mode: (g3 >> 8) & 0x01
+              };
+            }
+          } else if (variant >= 4 && variant <= 7) {
+            const offset = (variant - 4) * 4;
+            state.tmcProviderBuffer[offset] = String.fromCharCode((g3 >> 8) & 0xFF);
+            state.tmcProviderBuffer[offset + 1] = String.fromCharCode(g3 & 0xFF);
+            state.tmcProviderBuffer[offset + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+            state.tmcProviderBuffer[offset + 3] = String.fromCharCode(g4 & 0xFF);
+            const providerName = state.tmcProviderBuffer.join('').trim();
+            if (providerName) {
+              state.tmcServiceInfo.providerName = providerName;
+            }
           }
         } else {
           const cc = g2 & 0x07;
@@ -1466,7 +1534,12 @@ const App: React.FC = () => {
       const aid = g4.toString(16).toUpperCase().padStart(4, '0');
       const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
       const odaName = ODA_MAP[aid] || "Unknown ODA";
-      const newOda = { name: odaName, aid: aid, group: targetGroup };
+
+      if (aid === '0093') {
+          state.dabTargetGroup = targetGroup;
+      }
+
+      const newOda = { name: odaName, aid: aid, group: targetGroup, extra: (aid === '0093' ? state.dabExtraInfo : undefined) };
       state.odaApp = newOda;
       const eIdx = state.odaList.findIndex((o) => o.aid === aid);
       if (eIdx !== -1) {
@@ -1585,7 +1658,8 @@ const App: React.FC = () => {
         let isRtC = termIdx !== -1 ? cRtMsk.slice(0, termIdx).every(Boolean) : cRtMsk.every(Boolean);
         let rawRt = renderRdsBuffer(cRtBuf); 
         if (termIdx !== -1) {
-          rawRt = rawRt.substring(0, termIdx);
+          // Include the terminator character in the history for technical code display
+          rawRt = rawRt.substring(0, termIdx + 1);
         }
         if (isRtC) {
           if (rawRt !== state.rtCandidateString) { 
@@ -1768,8 +1842,9 @@ const App: React.FC = () => {
         
         // --- Bandscan Frequency Change Handler ---
         if (chunk.includes("RESET-------")) {
-          // Detect station change -> Archive previous one if recording
-          if (decoderState.current.isRecording) {
+          // Detect station change -> Archive previous one if recording (min 2s stay)
+          const now = Date.now();
+          if (decoderState.current.isRecording && (now - decoderState.current.frequencyStartTime >= 2000)) {
               captureBandscanEntry();
           }
           resetData();
@@ -1891,6 +1966,7 @@ const App: React.FC = () => {
     if (val) {
         // Start recording: Clear existing and attempt immediate fetch for current freq
         decoderState.current.bandscanEntries = [];
+        decoderState.current.frequencyStartTime = Date.now();
         if (apiTimeoutRef.current) clearTimeout(apiTimeoutRef.current);
         apiTimeoutRef.current = setTimeout(fetchBandscanMetadata, 500);
     }
@@ -1911,17 +1987,27 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex flex-row gap-2 w-full md:w-auto items-stretch">
-                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500">
+                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-1 md:order-2">
                   <span>STATUS</span> 
                   <span className={`font-bold ${status === ConnectionStatus.CONNECTED ? 'text-green-400' : status === ConnectionStatus.ERROR ? 'text-red-400' : 'text-slate-400'}`}>
                     {status}
                   </span>
                 </div>
                 
-                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500">
+                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-2 md:order-3">
                   <span>PACKETS</span> 
                   <span className="text-slate-200">{packetCount.toLocaleString()}</span>
                 </div>
+
+                <a 
+                  href="https://github.com/LucasGallone/RDSExpert/wiki" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors order-3 md:order-1 flex-none"
+                  title="Documentation on GitHub (Opens in a new tab)"
+                >
+                  <i className="fa-solid fa-circle-info text-sm md:text-base"></i>
+                </a>
             </div>
             
             <div className="flex items-center gap-2 flex-1">
