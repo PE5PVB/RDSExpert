@@ -83,7 +83,7 @@ export const ECC_COUNTRY_MAP: Record<string, Record<string, string>> = {
   "E1": {
     "8": "Bulgaria", "2": "Cyprus", "9": "Denmark / Faroe Islands", "F": "France",
     "A": "Gibraltar", "1": "Greece", "7": "Luxembourg", "E": "Romania", "3": "San Marino",
-    "4": "Switzerland", "C": "United Kingdom", "D": "Libya", "B": "Iraq", "5": "Jordan"
+    "4": "Switzerland", "C": "United Kingdom", "D": "Libya", "B": "Iraq", "5": "Jordan", "6": "Finland"
   },
   "E2": {
     "2": "Czech Republic", "A": "Iceland", "9": "Liechtenstein", "C": "Lithuania", "8": "Madeira",
