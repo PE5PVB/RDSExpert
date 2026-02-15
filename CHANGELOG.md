@@ -47,7 +47,7 @@
 - Fixed some errors in the characters table.
 
 ### --- 29/12/2025 ---
-- Plugin released for the TEF webservers.
+- Integration plugin released for the TEF webservers (Check the "RDSExpert-Plugin" repository for more details).
 - The interface has been reviewed to allow usage on smartphones, but exclusively in landscape format.
 
 ### --- 20/12/2025 ---
@@ -76,4 +76,5 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
