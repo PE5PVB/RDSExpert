@@ -9,6 +9,7 @@
 - Bandscan export: Added a delay of 2 seconds before an RDS is considered as "storable" to prevent RDS data from being logged for a previous frequency.
 - Detailed data/Bandscan export: Added empty Radiotext recognition. If a station doesn't send text but a technical code such as <0D>, the RT will be displayed as is.
 - Empty PS messages are now detected and stored in the PS history.
+- Added ECC recognition for Finland (6xxx > E1). Somehow, the addition of this country was omitted when creating the ECC recognition function.
 - TMC decoder: Added provider name, decoded from Group 8A.
 
 ### --- 11/02/2026 ---
@@ -76,5 +77,6 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
