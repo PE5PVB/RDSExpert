@@ -3,13 +3,13 @@
 ### --- 14/02/2026 ---
 - Added a tooltip to each RT line to indicate the maximum number of characters that can be sent depending on the group used, 2A or 2B ("32 char." / "64 char.")
 - Added an "information" icon. Clicking it will redirect the user to the decoder's documentation on GitHub (Wiki) via a new tab.
+- Added ECC recognition for Finland (6xxx > E1). Somehow, the addition of this country was omitted when creating the ECC recognition function.
 - Added EID and Channel info in the ODA's section of the PDF/TXT exports when the DAB Cross-Referencing ODA is detected.
 - Added Radiotext technical codes (e.g. <0D>) to the Radiotext history on the interface and in the TXT export.
 - Added user's preferences storage in the web browser (using localStorage). For example, if the user enables underscores on PS/RT, they will appear at the next session.
 - Bandscan export: Added a delay of 2 seconds before an RDS is considered as "storable" to prevent RDS data from being logged for a previous frequency.
 - Detailed data/Bandscan export: Added empty Radiotext recognition. If a station doesn't send text but a technical code such as <0D>, the RT will be displayed as is.
 - Empty PS messages are now detected and stored in the PS history.
-- Added ECC recognition for Finland (6xxx > E1). Somehow, the addition of this country was omitted when creating the ECC recognition function.
 - TMC decoder: Added provider name, decoded from Group 8A.
 
 ### --- 11/02/2026 ---
@@ -77,6 +77,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
