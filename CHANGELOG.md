@@ -75,5 +75,4 @@
 - Improvements made to the group distribution statistics in order to ignore incorrect packets.
 
 ### --- 06/12/2025 ---
-<br>
 Official beginning of the project.
