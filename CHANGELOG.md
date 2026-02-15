@@ -52,7 +52,7 @@
 
 ### --- 20/12/2025 ---
 - Added the possibility to connect to another server without clicking "Disconnect", thanks to the Enter key.
-- Added the possibility to connect automatically to a server by using the "?url=" parameter.
+- Added automatic connection to a webserver by using the "?url=" parameter.
 - Improved characters compatibility for the PTYN and Long PS fields, to resolve some decoding errors.
 - More improvements made to the TMC decoder.
 
@@ -76,3 +76,4 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
