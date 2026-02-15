@@ -1,5 +1,8 @@
 # RDSExpert Changelog
 
+### --- 15/02/2026 ---
+- TMC decoder: Fixed a bug in the Provider Name display.
+
 ### --- 14/02/2026 ---
 - Added a tooltip to each RT line to indicate the maximum number of characters that can be sent depending on the group used, 2A or 2B ("32 char." / "64 char.")
 - Added an "information" icon. Clicking it will redirect the user to the decoder's documentation on GitHub (Wiki) via a new tab.
@@ -77,6 +80,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
