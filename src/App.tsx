@@ -1355,7 +1355,7 @@ const App: React.FC = () => {
                 mode: (g3 >> 8) & 0x01
               };
             }
-          } else if (variant >= 4 && variant <= 7) {
+          } else if (variant >= 4 && variant <= 5) {
             const offset = (variant - 4) * 4;
             state.tmcProviderBuffer[offset] = String.fromCharCode((g3 >> 8) & 0xFF);
             state.tmcProviderBuffer[offset + 1] = String.fromCharCode(g3 & 0xFF);
