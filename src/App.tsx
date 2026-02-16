@@ -95,6 +95,8 @@ interface DecoderState {
   hasRtPlus: boolean;
   hasEon: boolean;
   hasTmc: boolean;
+  hasEws: boolean;
+  ewsId: string;
   eonMap: Map<string, EonNetwork>; 
   tmcServiceInfo: TmcServiceInfo;
   tmcBuffer: TmcMessage[]; 
@@ -559,6 +561,8 @@ const App: React.FC = () => {
     hasRtPlus: false,
     hasEon: false,
     hasTmc: false,
+    hasEws: false,
+    ewsId: "",
     eonMap: new Map<string, EonNetwork>(), 
     tmcServiceInfo: { 
       ltn: 0, 
@@ -1020,6 +1024,8 @@ const App: React.FC = () => {
     state.hasRtPlus = false;
     state.hasEon = false;
     state.hasTmc = false;
+    state.hasEws = false;
+    state.ewsId = "";
 
     state.ecc = "";
     state.lic = "";
@@ -1108,6 +1114,8 @@ const App: React.FC = () => {
         state.hasRtPlus = false;
         state.hasEon = false;
         state.hasTmc = false;
+        state.hasEws = false;
+        state.ewsId = "";
         
         state.ecc = "";
         state.lic = "";
@@ -1486,11 +1494,14 @@ const App: React.FC = () => {
       }
     } else if (groupTypeVal === 2 || groupTypeVal === 3) {
       if (groupTypeVal === 2) {
-        const variant = (g3 >> 12) & 0x07;
+        const variant = (g3 >> 12) & 0x0F;
         if (variant === 0) {
           state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
         } else if (variant === 3) {
           state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+        } else if (variant === 7) {
+          state.hasEws = true;
+          state.ewsId = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
         }
       }
       if (((g4 >> 11) & 0x1F) !== 0) {
@@ -1719,6 +1730,8 @@ const App: React.FC = () => {
           hasRtPlus: state.hasRtPlus, 
           hasEon: state.hasEon, 
           hasTmc: state.hasTmc, 
+          hasEws: state.hasEws,
+          ewsId: state.ewsId,
           eonData: eonData, 
           tmcServiceInfo: { ...state.tmcServiceInfo }, 
           tmcMessages: [...state.tmcBuffer],
