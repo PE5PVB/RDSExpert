@@ -5,7 +5,7 @@
 - Added factory PI codes detection and identification. When a factory code is detected, the "PI" field becomes red. Details about who uses this code are visible as a tooltip when the user puts the mouse cursor on the PI field. The values in database are based on RDS encoders manuals, personal knowledge and kind contributions from people who are into radio engineering.
 - Added frequencies counter for AF Method A.
 - Added PI to Callsign converter (for USA) as a tooltip. It appears when the user puts the mouse cursor on a PI value, if valid for such conversion.
-- PS underscores reduced for stations using 2B group for the Radiotext, since 2B only allows 32 characters text. When underscores are enabled on RT, they will stop at the 32nd character.
+- PS underscores reduced for stations using 2B group for the Radiotext, since 2B only allows 32 characters text. When underscores are enabled on RT, they will stop at the 32nd character. The underscores rule remains the same for stations using 2A for RT.
 - Underscores are now removed on Long PS and RT once a <0D> code is detected. They are still visible on the "Progressive underscores on RT" mode.
 - Underscores are now removed on Long PS when the decoded RDS doesn't include this function (via group 15A).
 
@@ -89,6 +89,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
