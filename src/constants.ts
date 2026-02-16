@@ -73,6 +73,43 @@ export const ODA_MAP: Record<string, string> = {
     "4BD8": "Radiotext+ for eRT"
 };
 
+// FACTORY PI MAP
+export const FACTORY_PI_MAP: Record<string, string> = {
+  "0000": "Factory code: Widely used by various manufacturers",
+  "0101": "Factory code: Unknown manufacturer(s)",
+  "1000": "Factory code: Airomate",
+  "1234": "Factory code: DEVA Broadcast",
+  "A000": "Factory code: AEV",
+  "20FE": "Factory code: Audessence",
+  "2FFF": "Factory code: RDS Master",
+  "3000": "Factory code: AEV",
+  "3001": "Factory code: MGY",
+  "3180": "Factory code: Unknown manufacturer(s)",
+  "3D44": "Factory code: Inovonics",
+  "4001": "Factory code: RVR",
+  "40A7": "Factory code: Silicon Labs",
+  "5000": "Factory code: Axel Technology, RVR, AEV, EuroTel, ...",
+  "5A39": "Factory code: CRL Systems",
+  "50F0": "Factory code: AEV",
+  "5158": "Factory code: AEV, OMB",
+  "51FF": "Factory code: Unknown manufacturer(s)",
+  "5200": "Factory code: RVR",
+  "5320": "Factory code: Unknown manufacturer(s)",
+  "5396": "Factory code: Unknown manufacturer(s)",
+  "53FF": "Factory code: Suono Telecom",
+  "542A": "Factory code: Solidyne",
+  "55FF": "Factory code: Itel",
+  "6000": "Factory code: Unknown manufacturer(s)",
+  "7000": "Factory code: Unknown manufacturer(s)",
+  "7210": "Factory code: Vigintos Elektronika",
+  "8000": "Factory code: Profline",
+  "9000": "Factory code: RVR, Prais",
+  "9084": "Factory code: PCS Electronics",
+  "F000": "Factory code: Audemat/WorldCast Systems, Axel Technology",
+  "F001": "Factory code: Aztec (FMB10)",
+  "FFFF": "Factory code: Widely used by various manufacturers"
+};
+
 // ECC + PI First Char -> Country Mapping
 export const ECC_COUNTRY_MAP: Record<string, Record<string, string>> = {
   "E0": {
@@ -1773,6 +1810,8 @@ export const INITIAL_RDS_DATA: RdsData = {
   hasRtPlus: false,
   hasEon: false,
   hasTmc: false,
+  hasEws: false,
+  ewsId: "",
   pty: 0,
   ptyName: "",
   ptyn: "",
