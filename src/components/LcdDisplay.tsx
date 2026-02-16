@@ -334,7 +334,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
                   {data.pi}
                 </span>
                 {showPiTooltip && (factoryPiInfo || piCallsign) && (
-                  <div className="absolute bottom-full left-0 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                  <div className="absolute bottom-full left-0 mb-3.5 px-3 py-1.5 bg-slate-800 text-white text-xs font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
                     {factoryPiInfo ? factoryPiInfo : `PI to Callsign (USA) > ${piCallsign}`}
                     <div className="absolute top-full left-4 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
                   </div>
