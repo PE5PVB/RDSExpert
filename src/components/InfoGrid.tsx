@@ -25,7 +25,9 @@ export const InfoGrid: React.FC<InfoGridProps> = ({ data }) => {
     if (isMethodB) {
         return `METHOD B (${methodBCount} LIST${methodBCount !== 1 ? 'S' : ''})`;
     }
-    return 'METHOD A';
+    const afCount = data.af.length;
+    if (afCount === 0) return 'NO LIST DETECTED';
+    return `METHOD A (${afCount} FREQUENC${afCount !== 1 ? 'IES' : 'Y'})`;
   };
 
   // Sort function for frequencies (strings)
