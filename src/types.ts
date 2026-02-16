@@ -14,6 +14,8 @@ export interface RdsData {
   hasRtPlus: boolean;  // Flag d'activité RT+ (Latched)
   hasEon: boolean;     // Flag d'activité EON (Latched)
   hasTmc: boolean;     // Flag d'activité TMC (Latched)
+  hasEws: boolean;     // Flag d'activité EWS (Latched)
+  ewsId: string;       // EWS ID (Group 1A)
   pty: number;         // Program Type (0-31)
   ptyName?: string;    // Decoded PTY Name (Optional, derived in components usually)
   ptyn: string;        // Program Type Name (8 chars, via Group 10A)
