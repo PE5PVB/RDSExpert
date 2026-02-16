@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { RdsData, PTY_RDS, PTY_RBDS, PTY_COMBINED } from '../types';
-import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP } from '../constants';
+import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP, FACTORY_PI_MAP } from '../constants';
 
 interface LcdDisplayProps {
   data: RdsData;
@@ -17,6 +17,10 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
     localStorage.setItem('rds_underscore_mode', underscoreMode);
   }, [underscoreMode]);
   
+  // State for PI Callsign Tooltip
+  const [showPiTooltip, setShowPiTooltip] = useState(false);
+  const piTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // State for ECC Tooltip
   const [showEccTooltip, setShowEccTooltip] = useState(false);
   const eccTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,6 +177,64 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
     ? data.odaList.map(item => `${item.name} [${item.aid}] on Group ${item.group}`).join('\n')
     : (data.odaApp ? `${data.odaApp.name} [${data.odaApp.aid}] on Group ${data.odaApp.group}` : undefined);
 
+  // PI to Callsign conversion (USA)
+  const getPiCallsign = (pi: string) => {
+    if (!pi || pi === "----" || pi.length !== 4 || !/^[1-9A]/.test(pi)) return null;
+    let hex = pi.toUpperCase();
+    if (hex.startsWith('AF')) {
+      hex = hex.substring(2, 4) + '00';
+    } else if (hex.startsWith('A')) {
+      hex = hex.charAt(1) + '0' + hex.substring(2, 4);
+    }
+    const picode = parseInt(hex, 16);
+    const specialCases: Record<number, string> = {
+      39248: "KEX", 39249: "KFH", 39250: "KFI", 39251: "KGA", 39252: "KGO",
+      39253: "KGU", 39254: "KGW", 39255: "KGY", 39256: "KID", 39257: "KIT",
+      39258: "KJR", 39259: "KLO", 39260: "KLZ", 39261: "KMA", 39262: "KMJ",
+      39263: "KNX", 39264: "KOA", 39268: "KQV", 39269: "KSL", 39270: "KUJ",
+      39271: "KVI", 39272: "KWG", 39275: "KYW", 39277: "WBZ", 39278: "WDZ",
+      39279: "WEW", 39281: "WGL", 39282: "WGN", 39283: "WGR", 39285: "WHA",
+      39286: "WHB", 39287: "WHK", 39288: "WHO", 39290: "WIP", 39291: "WJR",
+      39292: "WKY", 39293: "WLS", 39294: "WLW", 39297: "WOC", 39299: "WOL",
+      39300: "WOR", 39304: "WWJ", 39305: "WWL", 39312: "KDB", 39313: "KGB",
+      39314: "KOY", 39315: "KPQ", 39316: "KSD", 39317: "KUT", 39318: "KXL",
+      39319: "KXO", 39321: "WBT", 39322: "WGH", 39323: "WGY", 39324: "WHP",
+      39325: "WIL", 39326: "WMC", 39327: "WMT", 39328: "WOI", 39329: "WOW",
+      39330: "WRR", 39331: "WSB", 39332: "WSM", 39333: "KBW", 39334: "KCY",
+      39335: "KDF", 39338: "KHQ", 39339: "KOB", 39347: "WIS", 39348: "WJW",
+      39349: "WJZ", 39353: "WRC"
+    };
+    if (specialCases[picode]) return specialCases[picode];
+    if (picode >= 4096 && picode <= 39247) {
+      let call1 = picode >= 21672 ? "W" : "K";
+      let code = picode >= 21672 ? picode - 21672 : picode - 4096;
+      const c1 = Math.floor(code / 676);
+      const rem = code % 676;
+      const c2 = Math.floor(rem / 26);
+      const c3 = rem % 26;
+      return call1 + String.fromCharCode(65 + c1) + String.fromCharCode(65 + c2) + String.fromCharCode(65 + c3);
+    }
+    return null;
+  };
+  const piCallsign = getPiCallsign(data.pi);
+  const factoryPiInfo = FACTORY_PI_MAP[data.pi.toUpperCase()];
+
+  const handlePiMouseEnter = () => {
+    if (factoryPiInfo || piCallsign) {
+      piTooltipTimerRef.current = setTimeout(() => {
+        setShowPiTooltip(true);
+      }, 200);
+    }
+  };
+
+  const handlePiMouseLeave = () => {
+    if (piTooltipTimerRef.current) {
+      clearTimeout(piTooltipTimerRef.current);
+      piTooltipTimerRef.current = null;
+    }
+    setShowPiTooltip(false);
+  };
+
   // ECC Country Logic
   const getEccCountry = () => {
       if (!data.ecc) return null;
@@ -266,10 +328,18 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
 
            {/* Alignement vertical PI ajusté avec items-center pour un centrage parfait */}
            <div className="flex items-center space-x-3">
-              <span className="text-xl text-slate-400 font-bold pt-1">PI :</span>
-              <span className="text-4xl md:text-6xl font-mono font-bold text-white tracking-wider leading-none">
-                {data.pi}
-              </span>
+              <span className={`text-xl font-bold pt-1 ${factoryPiInfo ? 'text-red-500' : 'text-slate-400'}`}>PI :</span>
+              <div className="relative cursor-default" onMouseEnter={handlePiMouseEnter} onMouseLeave={handlePiMouseLeave}>
+                <span className="text-4xl md:text-6xl font-mono font-bold text-white tracking-wider leading-none">
+                  {data.pi}
+                </span>
+                {showPiTooltip && (factoryPiInfo || piCallsign) && (
+                  <div className="absolute bottom-full left-0 mb-2 px-3 py-1.5 bg-slate-800 text-white text-xs font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                    {factoryPiInfo ? factoryPiInfo : `PI to Callsign (USA) > ${piCallsign}`}
+                    <div className="absolute top-full left-4 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+                  </div>
+                )}
+              </div>
            </div>
         </div>
 
@@ -449,7 +519,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
       {/* Separator */}
       <div className="border-t border-slate-800/50 mt-4 mb-2"></div>
 
-      {/* Row: CT and PIN */}
+      {/* Row: CT and PIN/EWS */}
       <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
         {/* Local & UTC CT Wrapper for mobile row alignment */}
         <div className="flex flex-row gap-4 flex-1 items-stretch md:contents">
@@ -466,12 +536,23 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
           </div>
         </div>
 
-        {/* PIN - Separate line on mobile (below CTs) thanks to flex-col on parent, but horizontal on PC */}
-        <div className="flex-1 flex items-center space-x-2 bg-slate-900/40 rounded p-2 border border-slate-800/50 justify-center">
-            <span className="text-[10px] font-bold text-slate-500 uppercase mr-2">PIN</span>
-            <span className="font-mono text-lg text-white tracking-wide">
-              {data.pin ? data.pin : <span className="text-slate-600 italic text-sm">No Data</span>}
-            </span>
+        {/* PIN & EWS - Combined for layout stability */}
+        <div className="flex-1 flex flex-row gap-2 items-stretch">
+            {/* EWS */}
+            <div className={`flex-[0.4] flex items-center space-x-2 rounded p-2 border transition-all duration-300 justify-center ${data.hasEws ? 'bg-orange-950/40 border-orange-600 shadow-[0_0_15px_rgba(234,88,12,0.4)]' : 'bg-slate-900/40 border-slate-800/50 opacity-50'}`}>
+                <span className={`text-[10px] font-bold uppercase ${data.hasEws ? 'text-orange-400' : 'text-slate-500'}`}>EWS</span>
+                <span className={`font-mono text-lg font-bold ml-1 ${data.hasEws ? 'text-white' : 'text-slate-600'}`}>
+                    {data.hasEws ? data.ewsId : "--"}
+                </span>
+            </div>
+
+            {/* PIN */}
+            <div className="flex-[0.6] flex items-center space-x-2 bg-slate-900/40 rounded p-2 border border-slate-800/50 justify-center">
+                <span className="text-[10px] font-bold text-slate-500 uppercase mr-2">PIN</span>
+                <span className="font-mono text-lg text-white tracking-wide">
+                  {data.pin ? data.pin : <span className="text-slate-600 italic text-sm">No Data</span>}
+                </span>
+            </div>
         </div>
       </div>
 
