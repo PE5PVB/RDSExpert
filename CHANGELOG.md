@@ -1,5 +1,10 @@
 # RDSExpert Changelog
 
+### --- 16/02/2026 ---
+- Added EWS indicator. The new box lights up if the station sends an EWS indication on group 1A, and the 2-character ID appears.
+- Added factory PI codes detection and identification. When a factory code is detected, the "PI" field becomes red. Details about who uses this code are visible as a tooltip when the user puts the mouse cursor on the PI field. The values in database are based on RDS encoders manuals and personal knowledge.
+- Added PI to Callsign converter (for USA) as a tooltip. It appears when the user puts the mouse cursor on a PI value, if valid for such conversion.
+
 ### --- 15/02/2026 ---
 - TMC decoder: Fixed a bug in the Provider Name display.
 
@@ -80,6 +85,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
