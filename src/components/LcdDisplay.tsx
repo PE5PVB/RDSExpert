@@ -90,10 +90,19 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
       const rawMode = isRaw(type);
       const progressiveMode = (underscoreMode === 'RT_PROGRESSIVE' && type === 'rt');
       
+      // Detect if the current RT line is a 32-character version (Group 2B) to limit underscores
+      const is32CharRT = type === 'rt' && (
+        (mask === data.rtAMask && rtAVersionRef.current === "32 char.") ||
+        (mask === data.rtBMask && rtBVersionRef.current === "32 char.")
+      );
+
       // Handle "Empty" states logic first
       if (!text || text.length === 0) {
-          if (type === 'rt' && (rawMode || progressiveMode)) return <>{Array(64).fill('_').join('')}</>;
-          if (type === 'lps' && rawMode) return <>{Array(32).fill('_').join('')}</>;
+          if (type === 'rt' && (rawMode || progressiveMode)) {
+              // If in raw mode and it's a 32-char line, limit underscores to 32
+              if (rawMode && is32CharRT) return <>{Array(32).fill('_').join('')}{Array(32).fill(' ').join('')}</>;
+              return <>{Array(64).fill('_').join('')}</>;
+          }
           if (type === 'ps') return <>{Array(8).fill(' ').map((_,i)=><span key={i}>&nbsp;</span>)}</>;
           // For RT, return empty grid structure if empty, to maintain height
           if (type === 'rt') return <>{Array(64).fill(' ').map((_,i)=><span key={i}> </span>)}</>;
@@ -105,8 +114,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
       // Logic Update: Never trim fixed-width fields (PS, LPS, PTYN) AND Radiotext (RT).
       // We must preserve the spaces sent by the station or the empty buffer slots to respect alignment.
       if (type === 'ps' || type === 'lps' || type === 'ptyn') {
-          const len = (type === 'lps') ? 32 : 8; // Updated LPS length to 32
-          // Pad or truncate to exact length
+          const len = (type === 'lps') ? 32 : 8; 
           processedText = text.padEnd(len, ' ').substring(0, len);
       } else if (type === 'rt') {
           // For Radiotext, we strictly enforce 64 characters to respect buffer positioning.
@@ -115,6 +123,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
       }
       
       const chars = processedText.split('');
+      let controlFound = false; // Flag to track appearance of technical code in current render
       
       return (
         <>
@@ -123,6 +132,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
              
              // Technical Codes / Control Characters (0x00 - 0x1F)
              if (code < 32) {
+                 // Logic for Long PS & RT: We only set the flag to stop underscores if the code is exactly 0x0D (13)
+                 if ((type === 'lps' || type === 'rt') && code === 13) controlFound = true;
                  const hex = code.toString(16).toUpperCase().padStart(2, '0');
                  return (
                     <span key={index} className="inline-block text-[0.6em] align-middle text-slate-500 font-bold bg-slate-900/50 rounded px-0.5 mx-px border border-slate-700 select-none">
@@ -141,6 +152,13 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
              
              // Standard Raw Logic: Show underscore for any space
              if (rawMode && char === ' ') {
+                 // Logic for Long PS & RT: If the <0D> code was found previously in the string, 
+                 // we render a standard space instead of an underscore.
+                 // Also for LPS: if not active (no real data received), show spaces.
+                 const isLpsActuallyActive = data.longPs && data.longPs.trim().length > 0;
+                 if (((type === 'lps' || type === 'rt') && controlFound) || (type === 'lps' && !isLpsActuallyActive) || (is32CharRT && index >= 32)) {
+                     return <span key={index}> </span>;
+                 }
                  return <span key={index}>_</span>;
              }
              
@@ -473,7 +491,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
                  <div className={`w-2 h-2 rounded-full shadow-[0_0_4px_currentColor] border border-black/50 transition-colors duration-200 ${hasLongPs ? 'bg-blue-500 text-blue-500' : 'bg-slate-800 text-slate-800'}`}></div>
              </div>
              <div className="flex-1 px-3 overflow-x-auto no-scrollbar">
-               {(hasLongPs || isRaw('lps')) ? (
+               {hasLongPs ? (
                   <span className="font-mono text-lg text-white tracking-wide whitespace-pre block shrink-0">
                     <RenderEnhancedText text={data.longPs} type="lps" />
                   </span>
