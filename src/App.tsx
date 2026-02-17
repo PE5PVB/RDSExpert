@@ -769,7 +769,7 @@ const App: React.FC = () => {
 
     // 8. GROUPS COUNTER
     const G_DESC: Record<string, string> = {
-      "0A": "PI, PS, AF, PTY, Flags", "0B": "PI, PS, PTY, Flags", "1A": "ECC, LIC, PIN", "1B": "ECC, LIC, PIN",
+      "0A": "PI, PS, AF, PTY, Flags", "0B": "PI, PS, PTY, Flags", "1A": "ECC, LIC, PIN, EWS ID", "1B": "ECC, LIC, PIN, EWS ID",
       "2A": "Radiotext", "2B": "Radiotext", "3A": "ODA AIDs List", "3B": "ODA AIDs List",
       "4A": "CT - Time & Date", "4B": "CT - Time & Date", "5A": "TDC / ODA", "5B": "TDC / ODA",
       "6A": "ODA / In-House Applications", "6B": "ODA / In-House Applications", "7A": "ODA / Paging", "7B": "ODA / Paging",
