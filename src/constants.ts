@@ -78,7 +78,7 @@ export const FACTORY_PI_MAP: Record<string, string> = {
   "0000": "Factory code: Widely used by various manufacturers",
   "0101": "Factory code: Unknown manufacturer(s)",
   "1000": "Factory code: Airomate",
-  "1234": "Factory code: DEVA Broadcast",
+  "1234": "Factory code: DEVA Broadcast, PiFmAdv (Raspberry Pi)",
   "A000": "Factory code: AEV",
   "20FE": "Factory code: Audessence",
   "2FFF": "Factory code: RDS Master",
