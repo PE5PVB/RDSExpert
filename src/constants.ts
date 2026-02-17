@@ -84,7 +84,7 @@ export const FACTORY_PI_MAP: Record<string, string> = {
   "2FFF": "Factory code: RDS Master",
   "3000": "Factory code: AEV, Lucoro",
   "3001": "Factory code: MGY",
-  "3180": "Factory code: Unknown manufacturer(s)",
+  "3180": "Factory code: PCS Electronics",
   "3D44": "Factory code: Inovonics, Orban OPTIMOD",
   "4001": "Factory code: RVR",
   "40A7": "Factory code: Silicon Labs",
@@ -106,6 +106,8 @@ export const FACTORY_PI_MAP: Record<string, string> = {
   "9000": "Factory code: RVR, Prais",
   "9084": "Factory code: PCS Electronics",
   "93ED": "Factory code: Broadcast Electronics",
+  "A1B8": "Factory code: PCS Electronics",
+  "C080": "Factory code: PCS Electronics?",
   "F000": "Factory code: Audemat/WorldCast Systems, Axel Technology",
   "F001": "Factory code: Aztec (FMB10)",
   "FFFF": "Factory code: Widely used by various manufacturers"
