@@ -166,6 +166,17 @@ export interface TmcMessage {
     rawBlock4?: string;
 }
 
+export interface TmcResolvedLocation {
+  locationCode: number;
+  lat: number;
+  lon: number;
+  name?: string;
+  roadRef?: string;
+  prevLocationCode?: number;
+  nextLocationCode?: number;
+  status: 'resolved' | 'pending' | 'not_found';
+}
+
 export enum ConnectionStatus {
   DISCONNECTED = 'DISCONNECTED',
   CONNECTING = 'CONNECTING',
