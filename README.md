@@ -27,7 +27,7 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 <br>
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
 ## Special thanks to...
-• [@mrwish7](https://github.com/mrwish7/) for the initial implementation of the RDS WebSocket decoding (thanks to his [ws2tcp](https://github.com/mrwish7/ws2tcp) tool), without which creating this tool would have been more complicated. 
+• [@mrwish7](https://github.com/mrwish7/) for the initial implementation of the RDS WebSocket decoding (thanks to his [ws2tcp](https://github.com/mrwish7/ws2tcp) repository), without which creating this tool would have been more complicated. 
 <br>
 <br>
 • [@Bkram](https://github.com/bkram) for hosting the HTTP-compatible version on his server as mentioned above.
