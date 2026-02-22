@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RdsData, TmcMessage } from '../types';
+import { TmcMap } from './TmcMap';
 
 interface TmcViewerProps {
     data: RdsData;
@@ -12,6 +13,7 @@ interface TmcViewerProps {
 
 export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onToggle, onPause, onReset }) => {
     const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
+    const [showMap, setShowMap] = useState<boolean>(false);
     
     // Determine status of TMC service
     const statusLabel = data.hasTmc ? "SERVICE DETECTED" : "NO SERVICE DETECTED";
@@ -27,35 +29,35 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
         <div className={`border rounded-lg transition-all duration-300 overflow-hidden flex flex-col ${active ? 'bg-slate-950 border-slate-700' : 'bg-slate-900/30 border-slate-800'}`}>
             
             {/* 1. Header Control Bar */}
-            <div className="flex justify-between items-center p-3 bg-slate-900 border-b border-slate-800">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+            <div className="flex justify-between items-center p-2 md:p-3 bg-slate-900 border-b border-slate-800 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-2 md:gap-3">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1 md:gap-2 whitespace-nowrap">
                         {/* Car Icon */}
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
+                        <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
                         TRAFFIC MESSAGE CHANNEL (TMC)
                     </h3>
-                    {active && !paused && <span className="text-[10px] text-green-500 font-mono animate-pulse">● DECODING</span>}
-                    {active && paused && <span className="text-[10px] text-yellow-500 font-mono">● PAUSED</span>}
+                    {active && !paused && <span className="text-[10px] text-green-500 font-mono animate-pulse whitespace-nowrap shrink-0">● DECODING</span>}
+                    {active && paused && <span className="text-[10px] text-yellow-500 font-mono whitespace-nowrap shrink-0">● PAUSED</span>}
                     
-                    <span className={`text-[10px] font-bold uppercase border px-2 py-0.5 rounded ml-2 ${data.hasTmc ? 'bg-green-900/20 border-green-500/50 ' + statusColor : 'bg-slate-900 border-slate-700 ' + statusColor}`}>
+                    <span className={`text-[10px] font-bold uppercase border px-2 py-0.5 rounded ml-1 md:ml-2 whitespace-nowrap shrink-0 ${data.hasTmc ? 'bg-green-900/20 border-green-500/50 ' + statusColor : 'bg-slate-900 border-slate-700 ' + statusColor}`}>
                         {statusLabel}
                     </span>
                 </div>
                 
-                <div className="flex items-center gap-2">
-                    <button onClick={onReset} disabled={!active && data.tmcMessages.length === 0} className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 hover:text-white disabled:opacity-30 transition-colors">
+                <div className="flex items-center gap-1 md:gap-2 ml-4">
+                    <button onClick={onReset} disabled={!active && data.tmcMessages.length === 0} className="px-2 py-1 text-[10px] uppercase font-bold text-slate-400 hover:text-white disabled:opacity-30 transition-colors whitespace-nowrap shrink-0">
                        Reset
                     </button>
                     
-                    <button 
-                        onClick={onPause} 
-                        disabled={!active}
-                        className={`px-3 py-1 text-[10px] uppercase font-bold rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${paused ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/50 hover:bg-yellow-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
+                    <button
+                        onClick={() => setShowMap(true)}
+                        disabled={!active || data.tmcMessages.length === 0}
+                        className="px-2 py-1 text-[10px] uppercase font-bold text-cyan-400 hover:text-cyan-300 disabled:opacity-30 disabled:text-slate-400 transition-colors flex items-center gap-1 whitespace-nowrap shrink-0"
                     >
-                       {paused ? 'Resume' : 'Pause'}
+                        <i className="fa-solid fa-map-location-dot"></i> Map
                     </button>
 
-                    <button onClick={onToggle} className={`px-3 py-1 text-[10px] uppercase font-bold rounded border transition-colors ${active ? 'bg-red-500/10 text-red-400 border-red-500/50 hover:bg-red-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}>
+                    <button onClick={onToggle} className={`px-3 py-1 text-[10px] uppercase font-bold rounded border transition-colors whitespace-nowrap shrink-0 ${active ? 'bg-red-500/10 text-red-400 border-red-500/50 hover:bg-red-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}>
                        {active ? 'Stop' : 'Start'}
                     </button>
                 </div>
@@ -172,6 +174,15 @@ export const TmcViewer: React.FC<TmcViewerProps> = ({ data, active, paused, onTo
                    TMC Decoder is not currently enabled. Click "Start" to visualize Group 8A messages.
                 </div>
             )}
+
+            <TmcMap
+                messages={data.tmcMessages}
+                serviceInfo={data.tmcServiceInfo}
+                ecc={data.ecc}
+                pi={data.pi}
+                isOpen={showMap}
+                onClose={() => setShowMap(false)}
+            />
         </div>
     );
 };
