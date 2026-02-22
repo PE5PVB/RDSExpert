@@ -28,7 +28,15 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
 <br>
 <br>
-Special thanks to [@mrwish7](https://github.com/mrwish7/) for the initial implementation of WebSocket decoding, without which creating this tool would have been much more complicated. Thanks also to everyone who offers suggestions, provides feedback on the decoder's functionality, and so on.
+**Special thanks to:**
+<br>
+• [@mrwish7](https://github.com/mrwish7/) for the initial implementation of the RDS WebSocket decoding (thanks to his [ws2tcp](https://github.com/mrwish7/ws2tcp) tool), without which creating this tool would have been more complicated. 
+<br>
+• [@Bkram](https://github.com/bkram) for hosting the HTTP-compatible version on his server as mentioned above.
+<br>
+• [@PE5PVB (Sjef Verhoeven)](https://github.com/PE5PVB) for his work on adding the TMC Map feature.
+<br>
+• All those who submitted suggestions, ideas, bug reports and who took the time to test this tool with different types of RDS encoders.
 
 # Integrate RDSExpert into your TEF webserver as a plugin!
 
