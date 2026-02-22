@@ -1,5 +1,8 @@
 # RDSExpert Changelog
 
+### --- 22/02/2026 ---
+- Added TMC Map feature thanks to the contribution of Sjef Verhoeven (@PE5PVB). A major thanks to him for his work!
+
 ### --- 17/02/2026 ---
 - Added "EWS ID" into the description of group 1A in the Groups Monitor and the PDF + TXT exports.
 - Added identification for factory PI 3180 (PCS Electronics).
@@ -94,6 +97,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
