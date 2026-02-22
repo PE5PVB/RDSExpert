@@ -85,6 +85,7 @@ export const FACTORY_PI_MAP: Record<string, string> = {
   "3000": "Factory code: AEV, Lucoro",
   "3001": "Factory code: MGY",
   "3180": "Factory code: PCS Electronics",
+  "3712": "Factory code: Omnia",
   "3D44": "Factory code: Inovonics, Orban OPTIMOD",
   "4001": "Factory code: RVR",
   "40A7": "Factory code: Silicon Labs",
