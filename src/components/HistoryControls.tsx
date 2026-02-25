@@ -640,7 +640,7 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
 };
 
 // --- GENERIC HISTORY VIEWER COMPONENT (Handles Pause & Copy) ---
-interface HistoryViewerProps<T> {
+export interface HistoryViewerProps<T> {
     title: string;
     data: T[];
     onClose: () => void;
@@ -654,7 +654,7 @@ interface HistoryViewerProps<T> {
     storageKey?: string;
 }
 
-const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, fullCopyFormatter, emptyMessage, copyReverse, allowUnderscoreToggle, storageKey }: HistoryViewerProps<T>) => {
+export const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, renderRow, getCopyText, fullCopyFormatter, emptyMessage, copyReverse, allowUnderscoreToggle, storageKey }: HistoryViewerProps<T>) => {
     const [paused, setPaused] = useState(false);
     const [frozenData, setFrozenData] = useState<T[]>([]);
     const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED'>('IDLE');
@@ -776,9 +776,9 @@ const HistoryViewer = <T extends any>({ title, data, onClose, renderHeader, rend
     );
 };
 
-const HistoryViewerWrapper: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
+export const HistoryViewerWrapper: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, onClose, children, actions }) => {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-3 border-b border-slate-800 bg-slate-900">
                     <div className="flex items-center">
@@ -1502,7 +1502,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-slate-950 border border-slate-700 rounded-lg shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex justify-between items-center p-3 border-b border-slate-800 bg-slate-900">
                     <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -1602,7 +1602,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
 };
 
 const ApiErrorModal: React.FC<{ code: string; onClose: () => void }> = ({ code, onClose }) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
     <div className="bg-slate-900 border-2 border-red-500/50 rounded-lg shadow-2xl w-full max-w-sm flex flex-col overflow-hidden relative text-center">
       <div className="p-6 space-y-4">
         <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto border border-red-500/30">
