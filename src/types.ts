@@ -14,6 +14,8 @@ export interface RdsData {
   hasRtPlus: boolean;  // Flag d'activité RT+ (Latched)
   hasEon: boolean;     // Flag d'activité EON (Latched)
   hasTmc: boolean;     // Flag d'activité TMC (Latched)
+  hasTdc: boolean;     // Flag d'activité TDC (Latched)
+  hasIh: boolean;      // Flag d'activité IH (Latched)
   hasEws: boolean;     // Flag d'activité EWS (Latched)
   ewsId: string;       // EWS ID (Group 1A)
   pty: number;         // Program Type (0-31)
@@ -39,6 +41,8 @@ export interface RdsData {
   eonData: Record<string, EonNetwork>; // EON Data keyed by PI
   tmcServiceInfo: TmcServiceInfo; // Service Provider Info (SID, LTN, etc.)
   tmcMessages: TmcMessage[]; // Buffer of decoded TMC messages
+  tdcHistory: TdcHistoryItem[]; // Buffer of decoded TDC messages
+  ihHistory: IhHistoryItem[];  // Buffer of decoded IH messages
   ber: number;         // Bit Error Rate (Signal quality indicator)
   rssi: number;        // Signal Strength
   snr: number;         // Signal to Noise Ratio
@@ -99,6 +103,18 @@ export interface PsHistoryItem {
 export interface RtHistoryItem {
     time: string;
     text: string;
+}
+
+export interface TdcHistoryItem {
+    time: string;
+    text: string;
+    group: '5A' | '5B';
+}
+
+export interface IhHistoryItem {
+    time: string;
+    text: string;
+    group: '6A' | '6B';
 }
 
 export interface RawGroup {
