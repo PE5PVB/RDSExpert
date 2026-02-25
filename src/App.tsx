@@ -12,6 +12,8 @@ import {
   TmcServiceInfo, 
   PsHistoryItem, 
   RtHistoryItem, 
+  TdcHistoryItem,
+  IhHistoryItem,
   LogEntry,
   BandscanEntry
 } from './types';
@@ -26,7 +28,7 @@ import { LcdDisplay } from './components/LcdDisplay';
 import { InfoGrid } from './components/InfoGrid';
 import { GroupAnalyzer } from './components/GroupAnalyzer';
 import { TmcViewer } from './components/TmcViewer';
-import { HistoryControls } from './components/HistoryControls';
+import { HistoryControls, HistoryViewer } from './components/HistoryControls';
 
 interface AfBEntry {
   expected: number;
@@ -95,12 +97,20 @@ interface DecoderState {
   hasRtPlus: boolean;
   hasEon: boolean;
   hasTmc: boolean;
+  hasTdc: boolean;
+  hasIh: boolean;
   hasEws: boolean;
   ewsId: string;
   eonMap: Map<string, EonNetwork>; 
   tmcServiceInfo: TmcServiceInfo;
   tmcBuffer: TmcMessage[]; 
   tmcProviderBuffer: string[];
+  tdcHistoryBuffer: TdcHistoryItem[];
+  ihHistoryBuffer: IhHistoryItem[];
+  tdcBuffer5A: string;
+  tdcBuffer5B: string;
+  lastTdcIndex5A: number;
+  lastTdcIndex5B: number;
   
   // Analyzer State
   groupCounts: Record<string, number>;
@@ -500,6 +510,8 @@ const App: React.FC = () => {
   const [tmcActive, setTmcActive] = useState<boolean>(false);
   const tmcActiveRef = useRef<boolean>(false);
   const [tmcPaused, setTmcPaused] = useState<boolean>(false);
+  const [showTdcHistory, setShowTdcHistory] = useState<boolean>(false);
+  const [showIhHistory, setShowIhHistory] = useState<boolean>(false);
   const tmcPausedRef = useRef<boolean>(false);
   
   const wsRef = useRef<WebSocket | null>(null);
@@ -561,6 +573,8 @@ const App: React.FC = () => {
     hasRtPlus: false,
     hasEon: false,
     hasTmc: false,
+    hasTdc: false,
+    hasIh: false,
     hasEws: false,
     ewsId: "",
     eonMap: new Map<string, EonNetwork>(), 
@@ -573,6 +587,12 @@ const App: React.FC = () => {
     },
     tmcBuffer: [], 
     tmcProviderBuffer: new Array(16).fill(' '),
+    tdcHistoryBuffer: [],
+    ihHistoryBuffer: [],
+    tdcBuffer5A: "",
+    tdcBuffer5B: "",
+    lastTdcIndex5A: -1,
+    lastTdcIndex5B: -1,
     
     // Analyzer State
     groupCounts: {},
@@ -1015,6 +1035,10 @@ const App: React.FC = () => {
     state.tmcBuffer = [];
     state.tmcProviderBuffer.fill(' ');
     state.rtPlusTags.clear();
+    state.tdcHistoryBuffer = [];
+    state.ihHistoryBuffer = [];
+    state.tdcBuffer5A = "";
+    state.tdcBuffer5B = "";
 
     state.rtPlusItemRunning = false;
     state.rtPlusItemToggle = false;
@@ -1024,6 +1048,8 @@ const App: React.FC = () => {
     state.hasRtPlus = false;
     state.hasEon = false;
     state.hasTmc = false;
+    state.hasTdc = false;
+    state.hasIh = false;
     state.hasEws = false;
     state.ewsId = "";
 
@@ -1114,6 +1140,8 @@ const App: React.FC = () => {
         state.hasRtPlus = false;
         state.hasEon = false;
         state.hasTmc = false;
+        state.hasTdc = false;
+        state.hasIh = false;
         state.hasEws = false;
         state.ewsId = "";
         
@@ -1150,6 +1178,9 @@ const App: React.FC = () => {
         state.psHistoryLogged = false;
         state.psHistoryBuffer = [];
         state.rtHistoryBuffer = [];
+        state.tdcHistoryBuffer = [];
+        state.tdcBuffer5A = "";
+        state.tdcBuffer5B = "";
         state.psCandidateString = "        ";
         state.psStableSince = 0;
         state.psValidationBuffer = "        ";
@@ -1434,6 +1465,122 @@ const App: React.FC = () => {
           }
         }
       }
+    } else if (groupTypeVal === 10 || groupTypeVal === 11) {
+      // Group 5A or 5B: TDC (Transparent Data Channel)
+      const is5A = groupTypeVal === 10;
+      const groupLabel = is5A ? '5A' : '5B';
+      
+      // Check if this group is already assigned to an ODA application
+      const isOdaAssigned = state.odaList.some(oda => oda.group === groupLabel);
+      
+      if (isOdaAssigned) {
+        state.hasTdc = false;
+      } else {
+        state.hasTdc = true;
+        const bytes = [
+          (g3 >> 8) & 0xFF,
+          g3 & 0xFF,
+          (g4 >> 8) & 0xFF,
+          g4 & 0xFF
+        ];
+        
+        let currentBuffer = is5A ? state.tdcBuffer5A : state.tdcBuffer5B;
+        let lastIndex = is5A ? state.lastTdcIndex5A : state.lastTdcIndex5B;
+        const tdcIndex = g2 & 0x1F;
+
+        // Detection of message start/end via index rollover (e.g. F -> 0)
+        // We trigger a new line if the index has wrapped around and we have data
+        if (tdcIndex < lastIndex && currentBuffer.trim().length > 0) {
+          state.tdcHistoryBuffer.unshift({
+            time: new Date().toLocaleTimeString('fr-FR'),
+            text: currentBuffer,
+            group: groupLabel
+          });
+          if (state.tdcHistoryBuffer.length > 500) {
+            state.tdcHistoryBuffer.pop();
+          }
+          state.isDirty = true;
+          currentBuffer = "";
+        }
+        
+        if (is5A) state.lastTdcIndex5A = tdcIndex;
+        else state.lastTdcIndex5B = tdcIndex;
+
+        for (const b of bytes) {
+          // Split on NULL (0x00), LF (0x0A), CR (0x0D), ETX (0x03), or EOT (0x04)
+          if (b === 0x00 || b === 0x0A || b === 0x0D || b === 0x03 || b === 0x04) {
+            if (currentBuffer.trim().length > 0) {
+              state.tdcHistoryBuffer.unshift({
+                time: new Date().toLocaleTimeString('fr-FR'),
+                text: currentBuffer,
+                group: groupLabel
+              });
+              if (state.tdcHistoryBuffer.length > 500) {
+                state.tdcHistoryBuffer.pop();
+              }
+              state.isDirty = true;
+            }
+            currentBuffer = "";
+          } else if ((b >= 0x20 && b <= 0xFF) || b === 0x09) { // Printable RDS or Tab
+            const char = decodeRdsByte(b);
+            currentBuffer += char;
+
+            // Safety: if buffer gets too long without terminator, push it
+            if (currentBuffer.length > 1024) {
+              state.tdcHistoryBuffer.unshift({
+                time: new Date().toLocaleTimeString('fr-FR'),
+                text: currentBuffer,
+                group: groupLabel
+              });
+              if (state.tdcHistoryBuffer.length > 500) {
+                state.tdcHistoryBuffer.pop();
+              }
+              currentBuffer = "";
+              state.isDirty = true;
+            }
+          }
+        }
+        
+        if (is5A) state.tdcBuffer5A = currentBuffer;
+        else state.tdcBuffer5B = currentBuffer;
+      }
+    } else if (groupTypeVal === 12 || groupTypeVal === 13) {
+      // Group 6A or 6B: IH (In-House Applications)
+      const is6A = groupTypeVal === 12;
+      const groupLabel = is6A ? '6A' : '6B';
+      
+      // Check if this group is already assigned to an ODA application
+      const isOdaAssigned = state.odaList.some(oda => oda.group === groupLabel);
+      
+      if (isOdaAssigned) {
+        state.hasIh = false;
+      } else {
+        state.hasIh = true;
+        const bytes = [
+          (g3 >> 8) & 0xFF,
+          g3 & 0xFF,
+          (g4 >> 8) & 0xFF,
+          g4 & 0xFF
+        ];
+        
+        // Formats: Decimal and Hexadecimal
+        const hexStr = bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+        const decStr = bytes.map(b => b.toString().padStart(3, '0')).join(' ');
+        const asciiStr = bytes.map(b => (b >= 0x20 && b <= 0xFF) ? decodeRdsByte(b) : '.').join('');
+        
+        const combinedText = `HEX: ${hexStr} | DEC: ${decStr} | ASC: ${asciiStr}`;
+        
+        state.ihHistoryBuffer.unshift({
+          time: new Date().toLocaleTimeString('fr-FR'),
+          text: combinedText,
+          group: groupLabel
+        });
+        
+        if (state.ihHistoryBuffer.length > 500) {
+          state.ihHistoryBuffer.pop();
+        }
+        state.isDirty = true;
+      }
     } else if (groupTypeVal === 28) {
       state.hasEon = true;
       const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
@@ -1545,6 +1692,13 @@ const App: React.FC = () => {
       const aid = g4.toString(16).toUpperCase().padStart(4, '0');
       const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
       const odaName = ODA_MAP[aid] || "Unknown ODA";
+
+      // If an ODA is assigned to a TDC or IH group, turn off the corresponding indicator
+      if (targetGroup === '5A' || targetGroup === '5B') {
+        state.hasTdc = false;
+      } else if (targetGroup === '6A' || targetGroup === '6B') {
+        state.hasIh = false;
+      }
 
       if (aid === '0093') {
           state.dabTargetGroup = targetGroup;
@@ -1730,11 +1884,15 @@ const App: React.FC = () => {
           hasRtPlus: state.hasRtPlus, 
           hasEon: state.hasEon, 
           hasTmc: state.hasTmc, 
+          hasTdc: state.hasTdc,
+          hasIh: state.hasIh,
           hasEws: state.hasEws,
           ewsId: state.ewsId,
           eonData: eonData, 
           tmcServiceInfo: { ...state.tmcServiceInfo }, 
           tmcMessages: [...state.tmcBuffer],
+          tdcHistory: [...state.tdcHistoryBuffer],
+          ihHistory: [...state.ihHistoryBuffer],
           ps: currentPs, 
           longPs: renderRdsBuffer(state.lpsBuffer), 
           rtA: renderRdsBuffer(state.rtBuffer0), 
@@ -2055,7 +2213,12 @@ const App: React.FC = () => {
         </div>
         
         <div className="space-y-6">
-           <LcdDisplay data={rdsData} onReset={resetData} />
+           <LcdDisplay 
+             data={rdsData} 
+             onReset={resetData} 
+             onTdcClick={() => setShowTdcHistory(true)}
+             onIhClick={() => setShowIhHistory(true)}
+           />
            <HistoryControls data={rdsData} onSetRecording={setRecording} serverUrl={serverUrl} />
            <InfoGrid data={rdsData} />
            <GroupAnalyzer data={rdsData} active={analyzerActive} onToggle={toggleAnalyzer} onReset={resetAnalyzer} />
@@ -2068,7 +2231,7 @@ const App: React.FC = () => {
               onReset={resetTmc} 
            />
         </div>
-        
+
         <div className="bg-slate-950 rounded-lg border border-slate-800 font-mono text-xs h-48 shadow-inner flex flex-col">
            <div className="text-slate-400 border-b border-slate-800 p-4 pb-2 font-bold uppercase tracking-wider flex justify-between shrink-0 bg-slate-950 rounded-t-lg z-10">
              <span>System Logs</span> 
@@ -2088,12 +2251,77 @@ const App: React.FC = () => {
            </div>
         </div>
       </div>
+
+      {showTdcHistory && (
+        <HistoryViewer 
+          title="TDC HISTORY (TRANSPARENT DATA CHANNEL) [5A / 5B]"
+          onClose={() => setShowTdcHistory(false)}
+          data={rdsData.tdcHistory}
+          getCopyText={(item) => `[${item.time}] [${item.group}] ${item.text}`}
+          renderHeader={() => (
+            <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+              <th className="p-3 w-24">Time</th>
+              <th className="p-3 w-24">Group</th>
+              <th className="p-3">Text</th>
+            </tr>
+          )}
+          renderRow={(item, i) => (
+            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+              <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
+              <td className="p-3 text-blue-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">
+                {item.text.split('').map((char, idx) => {
+                  const code = char.charCodeAt(0);
+                  if (code < 32) {
+                    const hex = code.toString(16).toUpperCase().padStart(2, '0');
+                    return (
+                      <span key={idx} className="inline-block text-[0.6em] align-middle text-slate-500 font-bold bg-slate-900/50 rounded px-0.5 mx-px border border-slate-700 select-none">
+                        &lt;{hex}&gt;
+                      </span>
+                    );
+                  }
+                  return char;
+                })}
+              </td>
+            </tr>
+          )}
+          emptyMessage="No TDC data recorded on groups 5A or 5B."
+          copyReverse={true}
+        />
+      )}
+
+      {showIhHistory && (
+        <HistoryViewer 
+          title="IN-HOUSE APPLICATIONS HISTORY [6A / 6B]"
+          onClose={() => setShowIhHistory(false)}
+          data={rdsData.ihHistory}
+          getCopyText={(item) => `[${item.time}] [${item.group}] ${item.text}`}
+          renderHeader={() => (
+            <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+              <th className="p-3 w-24">Time</th>
+              <th className="p-3 w-24">Group</th>
+              <th className="p-3">Decoded Data</th>
+            </tr>
+          )}
+          renderRow={(item, i) => (
+            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+              <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
+              <td className="p-3 text-emerald-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-white font-mono text-sm leading-relaxed">
+                {item.text}
+              </td>
+            </tr>
+          )}
+          emptyMessage="No In-House data recorded on groups 6A or 6B."
+          copyReverse={true}
+        />
+      )}
     </div>
   );
 };
 
 const SecurityErrorModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
     <div className="bg-slate-900 border-2 border-red-500/50 rounded-lg shadow-2xl w-full max-w-md flex flex-col overflow-hidden relative">
       <div className="p-6 text-center space-y-4">
         <div className="w-16 h-16 bg-red-900/20 rounded-full flex items-center justify-center mx-auto border border-red-500/30">
