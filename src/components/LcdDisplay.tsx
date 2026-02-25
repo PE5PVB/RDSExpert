@@ -6,11 +6,13 @@ import { ECC_COUNTRY_MAP, LIC_LANGUAGE_MAP, FACTORY_PI_MAP } from '../constants'
 interface LcdDisplayProps {
   data: RdsData;
   onReset: () => void;
+  onTdcClick?: () => void;
+  onIhClick?: () => void;
 }
 
 type UnderscoreMode = 'OFF' | 'RT_PROGRESSIVE' | 'ALL' | 'PS_ONLY' | 'RT_ONLY';
 
-export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
+export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClick, onIhClick }) => {
   const [underscoreMode, setUnderscoreMode] = useState<UnderscoreMode>(() => (localStorage.getItem('rds_underscore_mode') as UnderscoreMode) || 'OFF');
   
   useEffect(() => {
@@ -450,6 +452,11 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
             <FlagBadge active={data.hasRtPlus} label="RT+" color="green" />
             <FlagBadge active={data.hasEon} label="EON" color="yellow" />
             <FlagBadge active={data.hasTmc} label="TMC" alert />
+            {/* TDC & IH Indicators - Visible on mobile only here */}
+            <div className="md:hidden flex gap-2">
+                <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
+                <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
+            </div>
         </div>
 
         {/* Combined PTY & PTYN Wrapper - Grouped for mobile alignment (order-2 on mobile, md:order-1 on PC) */}
@@ -499,6 +506,12 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
                  <span className="font-mono text-slate-600 text-sm italic">No Data</span>
                )}
              </div>
+        </div>
+
+        {/* TDC & IH Indicators - Visible on PC only here */}
+        <div className="shrink-0 hidden md:flex items-center justify-center gap-2 bg-slate-900/40 rounded p-2 border border-slate-800/50">
+            <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
+            <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
         </div>
         
         {/* ECC Box with Tooltip */}
@@ -586,7 +599,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset }) => {
   );
 };
 
-const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple'; tooltip?: string }> = ({ active, label, alert, color, tooltip }) => {
+const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple' | 'blue' | 'emerald'; tooltip?: string; onClick?: () => void }> = ({ active, label, alert, color, tooltip, onClick }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -616,13 +629,20 @@ const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; col
       activeClass = "text-yellow-400 bg-yellow-900/20 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]";
   } else if (color === 'purple') {
       activeClass = "text-purple-400 bg-purple-900/20 border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.3)]";
+  } else if (color === 'blue') {
+      activeClass = "text-blue-400 bg-blue-900/20 border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.6)] cursor-pointer hover:bg-blue-500/30";
+  } else if (color === 'emerald') {
+      activeClass = "text-emerald-400 bg-emerald-900/20 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.6)] cursor-pointer hover:bg-emerald-500/30";
   }
   
   const inactiveClass = "text-slate-700 bg-slate-900/50 border-slate-800 opacity-50";
 
   return (
     <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300 cursor-default`}>
+        <span 
+          onClick={active ? onClick : undefined}
+          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300 cursor-default`}
+        >
           {label}
         </span>
         {showTooltip && (
