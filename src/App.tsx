@@ -795,7 +795,7 @@ const App: React.FC = () => {
       "6A": "In House Applications / ODA", "6B": "In House Applications / ODA", "7A": "Radio Paging / ODA", "7B": "Radio Paging / ODA",
       "8A": "TMC", "8B": "ODA", "9A": "EWS / ODA", "9B": "EWS / ODA",
       "10A": "PTYN", "10B": "ODA", "11A": "ODA", "11B": "ODA", "12A": "ODA", "12B": "ODA",
-      "13A": "Enhanced Radio Paging / ODA", "13B": "Enhanced Radio Paging / ODA", "14A": "EON", "14B": "EON TA",
+      "13A": "Enhanced Radio Paging / ODA", "13B": "ODA", "14A": "EON", "14B": "EON TA",
       "15A": "Long PS", "15B": "Fast Basic Tuning"
     };
 
