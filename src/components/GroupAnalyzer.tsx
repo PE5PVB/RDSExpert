@@ -76,7 +76,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "0A": "PI, PS, AF, PTY, Flags",
     "0B": "PI, PS, PTY, Flags",
     "1A": "ECC, LIC, PIN, EWS ID",
-    "1B": "ECC, LIC, PIN, EWS ID",
+    "1B": "PIN",
     "2A": "Radiotext",
     "2B": "Radiotext",
     "3A": "ODA AIDs List",
