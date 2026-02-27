@@ -793,7 +793,7 @@ const App: React.FC = () => {
       "2A": "Radiotext", "2B": "Radiotext", "3A": "ODA AIDs List", "3B": "ODA",
       "4A": "CT - Time & Date", "4B": "ODA", "5A": "TDC / ODA", "5B": "TDC / ODA",
       "6A": "In House Applications / ODA", "6B": "In House Applications / ODA", "7A": "Radio Paging / ODA", "7B": "Radio Paging / ODA",
-      "8A": "TMC", "8B": "ODA", "9A": "EWS / ODA", "9B": "EWS / ODA",
+      "8A": "TMC / ODA", "8B": "ODA", "9A": "EWS / ODA", "9B": "EWS / ODA",
       "10A": "PTYN", "10B": "ODA", "11A": "ODA", "11B": "ODA", "12A": "ODA", "12B": "ODA",
       "13A": "Enhanced Radio Paging / ODA", "13B": "ODA", "14A": "EON", "14B": "EON TA",
       "15A": "Long PS", "15B": "Fast Basic Tuning"
