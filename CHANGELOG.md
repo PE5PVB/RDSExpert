@@ -1,7 +1,7 @@
 # RDSExpert Changelog
 
 ### --- 27/02/2026 ---
-- Corrected group 4B description ("CT - Clock & Time" -> "ODA)
+- Corrected group 4B description ("CT - Clock & Time" -> "ODA")
 
 ### --- 25/02/2026 ---
 - Added In-House Applications decoding. There is now an "IH" indicator: It lights up when such data is detected. To click on it will allow the user to view the data sent on groups 6A and 6B. An intelligent mechanism verifies whether groups 6A and 6B are actually used for sending In-House data or for an ODA.
@@ -105,6 +105,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
