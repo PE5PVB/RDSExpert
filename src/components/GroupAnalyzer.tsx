@@ -100,7 +100,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "12A": "ODA",
     "12B": "ODA",
     "13A": "Enhanced Radio Paging / ODA",
-    "13B": "Enhanced Radio Paging / ODA",
+    "13B": "ODA",
     "14A": "EON",
     "14B": "EON TA",
     "15A": "Long PS",
