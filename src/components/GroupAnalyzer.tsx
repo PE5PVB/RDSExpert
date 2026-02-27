@@ -82,7 +82,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "3A": "ODA AIDs List",
     "3B": "ODA AIDs List",
     "4A": "CT (Time & Date)",
-    "4B": "CT (Time & Date)",
+    "4B": "ODA",
     "5A": "TDC / ODA",
     "5B": "TDC / ODA",
     "6A": "ODA / In-House Applications",
