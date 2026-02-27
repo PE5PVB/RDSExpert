@@ -790,12 +790,12 @@ const App: React.FC = () => {
     // 8. GROUPS COUNTER
     const G_DESC: Record<string, string> = {
       "0A": "PI, PS, AF, PTY, Flags", "0B": "PI, PS, PTY, Flags", "1A": "ECC, LIC, PIN, EWS ID", "1B": "ECC, LIC, PIN, EWS ID",
-      "2A": "Radiotext", "2B": "Radiotext", "3A": "ODA AIDs List", "3B": "ODA AIDs List",
+      "2A": "Radiotext", "2B": "Radiotext", "3A": "ODA AIDs List", "3B": "ODA",
       "4A": "CT - Time & Date", "4B": "ODA", "5A": "TDC / ODA", "5B": "TDC / ODA",
-      "6A": "ODA / In-House Applications", "6B": "ODA / In-House Applications", "7A": "ODA / Paging", "7B": "ODA / Paging",
-      "8A": "TMC", "8B": "ODA", "9A": "EWS - Emergency Warning System", "9B": "EWS - Emergency Warning System",
-      "10A": "PTYN", "10B": "PTYN", "11A": "ODA", "11B": "ODA", "12A": "ODA", "12B": "ODA",
-      "13A": "ODA / Enhanced Paging", "13B": "ODA / Enhanced Paging", "14A": "EON", "14B": "EON TA",
+      "6A": "In House Applications / ODA", "6B": "In House Applications / ODA", "7A": "Radio Paging / ODA", "7B": "Radio Paging / ODA",
+      "8A": "TMC", "8B": "ODA", "9A": "EWS / ODA", "9B": "EWS / ODA",
+      "10A": "PTYN", "10B": "ODA", "11A": "ODA", "11B": "ODA", "12A": "ODA", "12B": "ODA",
+      "13A": "Enhanced Radio Paging / ODA", "13B": "Enhanced Radio Paging / ODA", "14A": "EON", "14B": "EON TA",
       "15A": "Long PS", "15B": "Fast Basic Tuning"
     };
 
