@@ -90,7 +90,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "7A": "ODA / Paging",
     "7B": "ODA / Paging",
     "8A": "TMC",
-    "8B": "TMC",
+    "8B": "ODA",
     "9A": "EWS (Emergency Warning System)",
     "9B": "EWS (Emergency Warning System)",
     "10A": "PTYN",
