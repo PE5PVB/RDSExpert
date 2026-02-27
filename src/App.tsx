@@ -1545,7 +1545,7 @@ const App: React.FC = () => {
         else state.tdcBuffer5B = currentBuffer;
       }
     } else if (groupTypeVal === 12 || groupTypeVal === 13) {
-      // Group 6A or 6B: IH (In-House Applications)
+      // Group 6A or 6B: IH (In House Applications)
       const is6A = groupTypeVal === 12;
       const groupLabel = is6A ? '6A' : '6B';
       
@@ -2285,14 +2285,14 @@ const App: React.FC = () => {
               </td>
             </tr>
           )}
-          emptyMessage="No TDC data recorded on groups 5A or 5B."
+          emptyMessage="No TDC data detected on groups 5A or 5B."
           copyReverse={true}
         />
       )}
 
       {showIhHistory && (
         <HistoryViewer 
-          title="IN-HOUSE APPLICATIONS HISTORY [6A / 6B]"
+          title="IN HOUSE APPLICATIONS HISTORY [6A / 6B]"
           onClose={() => setShowIhHistory(false)}
           data={rdsData.ihHistory}
           getCopyText={(item) => `[${item.time}] [${item.group}] ${item.text}`}
@@ -2312,7 +2312,7 @@ const App: React.FC = () => {
               </td>
             </tr>
           )}
-          emptyMessage="No In-House data recorded on groups 6A or 6B."
+          emptyMessage="No In House data detected on groups 6A or 6B."
           copyReverse={true}
         />
       )}
