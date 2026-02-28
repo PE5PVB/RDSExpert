@@ -1,5 +1,15 @@
 # RDSExpert Changelog
 
+### --- 28/02/2026 ---
+- Added a 3 seconds delay for the In House Applications and TDC detection, in order to prevent false positives. The indicators could light up incorrectly if groups 5A/5B and 6A/6B were used for another purpose.
+- Added a new value to the LIC list (Language codes): LIC 40 -> "Clean feed".
+- Added LW/MW frequencies recognition in the Method A AF lists. When found, they are displayed in purple boxes.
+- Added recognition of the version used by the user (HTTP or HTTPS) to ensure that the information window regarding the inability to use an HTTP server on the HTTPS interface is not displayed when the HTTP version is used. A button has also been added to the HTTPS version modal, allowing immediate connection to the HTTP server via the version hosted by @Bkram (Opens in a new tab).
+- Fixed a bug in the Long PS field that caused incorrect display during progressive decoding of Cyrillic characters until decoding was complete.
+- Fixed a bug that prevented Radiotext+ detection and decoding on groups 5A/5B and 6A/6B, following the addition of TDC and In House Applications data decoding.
+- In the plugin version, the "IH" indicator is now located between "TMC" and "TDC" to avoid confusion between these two indicators.
+- The display of RDS groups content has been revised in the “Groups Monitor” section to make it clearer and more detailed.
+
 ### --- 27/02/2026 ---
 - Corrected and refined some group descriptions.
 
@@ -105,6 +115,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
