@@ -31,7 +31,15 @@ export const InfoGrid: React.FC<InfoGridProps> = ({ data }) => {
   };
 
   // Sort function for frequencies (strings)
-  const sortFreqs = (arr: string[]) => [...arr].sort((a, b) => parseFloat(a) - parseFloat(b));
+  const sortFreqs = (arr: string[]) => {
+    const fm = arr.filter(f => !f.includes('kHz')).sort((a, b) => parseFloat(a) - parseFloat(b));
+    const am = arr.filter(f => f.includes('kHz')).sort((a, b) => {
+        const valA = parseInt(a.replace(' kHz', ''));
+        const valB = parseInt(b.replace(' kHz', ''));
+        return valA - valB;
+    });
+    return [...fm, ...am];
+  };
 
   // Determine what to display based on Method
   let displayContent;
@@ -85,10 +93,17 @@ export const InfoGrid: React.FC<InfoGridProps> = ({ data }) => {
       displayContent = displayAf.length > 0 ? (
             <div className="flex flex-wrap gap-3">
               {displayAf.map((freq, idx) => {
+                const isAm = freq.includes('kHz');
                 const isHead = data.afListHead === freq;
-                const styleClass = isHead 
-                    ? "bg-blue-600 border-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.4)]" 
-                    : "bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600";
+                let styleClass = "";
+                
+                if (isHead) {
+                    styleClass = "bg-blue-600 border-blue-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.4)]";
+                } else if (isAm) {
+                    styleClass = "bg-purple-600 border-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]";
+                } else {
+                    styleClass = "bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600";
+                }
                 
                 return (
                   <span key={idx} className={`px-3 py-1.5 ${styleClass} text-sm font-mono rounded border transition-colors cursor-default shadow-sm flex items-center gap-1`}>
