@@ -78,7 +78,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     "1A": "ECC, LIC, PIN, EWS ID",
     "1B": "PIN",
     "2A": "Radiotext",
-    "2B": "Radiotext",
+    "2B": "Radiotext (Max. 32 characters)",
     "3A": "ODA AIDs List",
     "3B": "ODA",
     "4A": "CT (Time & Date)",
@@ -317,11 +317,11 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                       dabTargetGroupRef.current = targetGroup;
                   }
                   
-                  let logLine = `ODA detected (3A): ${odaName} [${aidHex}] on Group ${targetGroup}`;
+                  let logLine = `ODA detected: ${odaName} [${aidHex}] on Group ${targetGroup}`;
                   
                   // If info is already available for DAB ODA, format line according to user request
                   if (aidHex === '0093' && dabInfoRef.current) {
-                      logLine = `ODA detected (3A): ${odaName} [${aidHex}] on Group ${targetGroup}${dabInfoRef.current}`;
+                      logLine = `ODA detected: ${odaName} [${aidHex}] on Group ${targetGroup}${dabInfoRef.current}`;
                   }
 
                   setOdaLogs(prev => {
@@ -354,7 +354,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                           const idx = prev.findIndex(l => l.includes('DAB Cross-Referencing [0093]'));
                           if (idx !== -1) {
                               const next = [...prev];
-                              next[idx] = `ODA detected (3A): DAB Cross-Referencing [0093] on Group ${dabTargetGroupRef.current}${newInfo}`;
+                              next[idx] = `ODA detected: DAB Cross-Referencing [0093] on Group ${dabTargetGroupRef.current}${newInfo}`;
                               return next;
                           }
                           return prev;
@@ -407,18 +407,38 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                         const hex = grp.blocks.map(b => b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
                         
                         // Detailed Breakdown
-                        const b2Bin = toBin(g2, 16); 
-                        const b3Bin = toBin(g3, 16);
-                        const b4Bin = toBin(g4, 16);
+                        const type = (g2 >> 12) & 0xF;
+                        const version = (g2 >> 11) & 1;
+                        const tp = (g2 >> 10) & 1;
+                        const pty = (g2 >> 5) & 0x1F;
+                        const b2Rest = g2 & 0x1F;
+                        const groupTypeStr = `${type}${version === 0 ? 'A' : 'B'}`;
+                        const tpStr = tp.toString();
+                        const ptyBin = pty.toString(2).padStart(5, '0');
+                        const b2RestBin = b2Rest.toString(2).padStart(5, '0');
+                        
+                        const b3H = (g3 >> 8) & 0xFF;
+                        const b3L = g3 & 0xFF;
+                        const b4H = (g4 >> 8) & 0xFF;
+                        const b4L = g4 & 0xFF;
 
-                        // ASCII decoding for Blocks 3 & 4 (High byte / Low byte)
-                        const chars = [
-                            toAscii((g3 >> 8) & 0xFF), toAscii(g3 & 0xFF),
-                            toAscii((g4 >> 8) & 0xFF), toAscii(g4 & 0xFF)
-                        ].map(c => `'${c}'`).join(' ');
+                        const b3HighBin = b3H.toString(2).padStart(8, '0');
+                        const b3LowBin = b3L.toString(2).padStart(8, '0');
+                        const b4HighBin = b4H.toString(2).padStart(8, '0');
+                        const b4LowBin = b4L.toString(2).padStart(8, '0');
 
-                        // Layout: TIME (8 chars) | HEX (19 chars) | BINS | ASCII
-                        const line = `${grp.time}      ${hex}      ${b2Bin}  ${b3Bin}  ${b4Bin}      ${chars}`;
+                        const dec3H = b3H.toString().padStart(3, ' ');
+                        const dec3L = b3L.toString().padStart(3, ' ');
+                        const dec4H = b4H.toString().padStart(3, ' ');
+                        const dec4L = b4L.toString().padStart(3, ' ');
+
+                        const char3H = (b3H >= 0x20 && b3H <= 0x9F) ? decodeRdsByte(b3H) : '.';
+                        const char3L = (b3L >= 0x20 && b3L <= 0x9F) ? decodeRdsByte(b3L) : '.';
+                        const char4H = (b4H >= 0x20 && b4H <= 0x9F) ? decodeRdsByte(b4H) : '.';
+                        const char4L = (b4L >= 0x20 && b4L <= 0x9F) ? decodeRdsByte(b4L) : '.';
+
+                        // Layout: TIME (8 chars) | HEX (19 chars) | NEW FORMAT
+                        const line = `${grp.time}      ${hex}   ${groupTypeStr.padEnd(3, ' ')} ${tpStr} ${ptyBin} ${b2RestBin}  ${b3HighBin} ${b3LowBin}  ${b4HighBin} ${b4LowBin}  ${dec3H} ${dec3L} ${dec4H} ${dec4L}  '${char3H}${char3L}' '${char4H}${char4L}'`;
                         
                         // Append to bottom, keep last 100 lines
                         const newItem: LogItem = { id: logIdCounter.current++, text: line };
