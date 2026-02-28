@@ -99,6 +99,8 @@ interface DecoderState {
   hasTmc: boolean;
   hasTdc: boolean;
   hasIh: boolean;
+  tdcSeenDuringGrace: boolean;
+  ihSeenDuringGrace: boolean;
   hasEws: boolean;
   ewsId: string;
   eonMap: Map<string, EonNetwork>; 
@@ -146,6 +148,7 @@ interface DecoderState {
   // DAB Cross-Referencing tracking
   dabTargetGroup: string | null;
   dabExtraInfo: string;
+  lfMfFollows: boolean;
 }
 
 // --- RDS Character Set Mapping (Custom Super-Hybrid Table) ---
@@ -386,15 +389,9 @@ const decodeRdsByte = (b: number): string => {
 // --- Hybrid Decoder Function ---
 const renderRdsBuffer = (chars: string[]): string => {
   const bytes = new Uint8Array(
-    chars.map((c) => {
-      if (c) {
-        return c.charCodeAt(0);
-      }
-      return 0x20;
-    })
+    chars.map((c) => (c ? c.charCodeAt(0) : 0x20))
   );
   
-  // High bit detection for UTF-8
   const hasHighBits = bytes.some((b) => b > 127);
   
   if (hasHighBits) {
@@ -403,16 +400,27 @@ const renderRdsBuffer = (chars: string[]): string => {
       const decoded = utf8Decoder.decode(bytes);
       return decoded.replace(/\0/g, ' ');
     } catch (e) {
-      // Switching to standard RDS decoding in case of UTF-8 failure
+      // UTF-8 failed. Check if it looks like a valid but incomplete UTF-8 sequence.
+      // We look for at least one valid multi-byte character to confirm it's UTF-8.
+      let hasValidUtf8 = false;
+      for (let i = 0; i < bytes.length - 1; i++) {
+        if (bytes[i] >= 0xC2 && bytes[i] <= 0xDF && bytes[i+1] >= 0x80 && bytes[i+1] <= 0xBF) {
+          hasValidUtf8 = true;
+          break;
+        }
+      }
+
+      if (hasValidUtf8) {
+        // It's likely UTF-8 but incomplete. Use non-fatal decode and replace errors with spaces.
+        const looseDecoder = new TextDecoder("utf-8", { fatal: false });
+        return looseDecoder.decode(bytes).replace(/\uFFFD/g, ' ').replace(/\0/g, ' ');
+      }
     }
   }
   
   return chars.map((c) => {
     const b = c ? c.charCodeAt(0) : 0x20;
-    if (b === 0) {
-      return ' ';
-    }
-    return decodeRdsByte(b);
+    return b === 0 ? ' ' : decodeRdsByte(b);
   }).join("");
 };
 
@@ -575,6 +583,8 @@ const App: React.FC = () => {
     hasTmc: false,
     hasTdc: false,
     hasIh: false,
+    tdcSeenDuringGrace: false,
+    ihSeenDuringGrace: false,
     hasEws: false,
     ewsId: "",
     eonMap: new Map<string, EonNetwork>(), 
@@ -627,7 +637,8 @@ const App: React.FC = () => {
 
     // DAB Cross-Referencing tracking
     dabTargetGroup: null,
-    dabExtraInfo: ""
+    dabExtraInfo: "",
+    lfMfFollows: false
   });
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
@@ -1050,6 +1061,8 @@ const App: React.FC = () => {
     state.hasTmc = false;
     state.hasTdc = false;
     state.hasIh = false;
+    state.tdcSeenDuringGrace = false;
+    state.ihSeenDuringGrace = false;
     state.hasEws = false;
     state.ewsId = "";
 
@@ -1093,6 +1106,7 @@ const App: React.FC = () => {
 
     state.dabTargetGroup = null;
     state.dabExtraInfo = "";
+    state.lfMfFollows = false;
     
     state.isDirty = true;
   }, []);
@@ -1103,6 +1117,22 @@ const App: React.FC = () => {
 
     const piHex = g1.toString(16).toUpperCase().padStart(4, '0');
     
+    // Check for TDC/IH grace period expiration
+    if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+      if (state.tdcSeenDuringGrace) {
+        if (!state.odaList.some(oda => oda.group === '5A' || oda.group === '5B')) {
+          state.hasTdc = true;
+        }
+        state.tdcSeenDuringGrace = false;
+      }
+      if (state.ihSeenDuringGrace) {
+        if (!state.odaList.some(oda => oda.group === '6A' || oda.group === '6B')) {
+          state.hasIh = true;
+        }
+        state.ihSeenDuringGrace = false;
+      }
+    }
+
     if (piHex === state.piCandidate) {
       state.piCounter++;
     } else {
@@ -1142,6 +1172,8 @@ const App: React.FC = () => {
         state.hasTmc = false;
         state.hasTdc = false;
         state.hasIh = false;
+        state.tdcSeenDuringGrace = false;
+        state.ihSeenDuringGrace = false;
         state.hasEws = false;
         state.ewsId = "";
         
@@ -1245,6 +1277,11 @@ const App: React.FC = () => {
     state.pty = pty;
 
     const decodeAf = (code: number) => (code >= 1 && code <= 204) ? (87.5 + (code * 0.1)).toFixed(1) : null;
+    const decodeLfMf = (code: number) => {
+      if (code >= 1 && code <= 15) return `${153 + (code - 1) * 9} kHz`;
+      if (code >= 16 && code <= 135) return `${531 + (code - 16) * 9} kHz`;
+      return null;
+    };
 
     if (groupTypeVal === 0 || groupTypeVal === 1) { 
       const isGroupA = groupTypeVal === 0;
@@ -1322,46 +1359,84 @@ const App: React.FC = () => {
             }
           };
 
-          if (isAfHeader(af1)) {
-            const headFreq = decodeAf(af2);
-            if (headFreq) {
-              processMethodAFreq(headFreq);
-              state.afListHead = headFreq;
-              const headIdx = state.afSet.indexOf(headFreq);
-              if (headIdx > 0) {
-                state.afSet.splice(headIdx, 1);
-                state.afSet.unshift(headFreq);
+          const handleAfCode = (code: number) => {
+            if (state.lfMfFollows) {
+              const amFreq = decodeLfMf(code);
+              if (amFreq) processMethodAFreq(amFreq);
+              state.lfMfFollows = false;
+              return true;
+            }
+            if (code === 250) {
+              state.lfMfFollows = true;
+              return true;
+            }
+            return false;
+          };
+
+          if (!handleAfCode(af1)) {
+            if (isAfHeader(af1)) {
+              const headFreq = decodeAf(af2);
+              if (headFreq) {
+                processMethodAFreq(headFreq);
+                state.afListHead = headFreq;
+                const headIdx = state.afSet.indexOf(headFreq);
+                if (headIdx > 0) {
+                  state.afSet.splice(headIdx, 1);
+                  state.afSet.unshift(headFreq);
+                }
+                const count = Number(af1) - 224;
+                state.currentMethodBGroup = headFreq;
+                if (!state.afBMap.has(headFreq)) {
+                  state.afBMap.set(headFreq, { 
+                    expected: count, 
+                    afs: new Set(), 
+                    matchCount: 0, 
+                    pairCount: 0 
+                  });
+                } else {
+                  state.afBMap.get(headFreq)!.expected = count;
+                }
               }
-              const count = Number(af1) - 224;
-              state.currentMethodBGroup = headFreq;
-              if (!state.afBMap.has(headFreq)) {
-                state.afBMap.set(headFreq, { 
-                  expected: count, 
-                  afs: new Set(), 
-                  matchCount: 0, 
-                  pairCount: 0 
-                });
-              } else {
-                state.afBMap.get(headFreq)!.expected = count;
+            } else {
+              if (freq1Str) {
+                processMethodAFreq(freq1Str);
               }
             }
-          } else {
-            if (freq1Str) {
-              processMethodAFreq(freq1Str);
-            }
+          }
+
+          if (!handleAfCode(af2)) {
             if (freq2Str) {
               processMethodAFreq(freq2Str);
             }
           }
 
-          if (isAfFreq(af1) && isAfFreq(af2)) {
-            const f1 = decodeAf(af1);
-            const f2 = decodeAf(af2);
-            if (f1 && f2 && state.currentMethodBGroup && state.afBMap.has(state.currentMethodBGroup)) {
-              const entry = state.afBMap.get(state.currentMethodBGroup)!;
-              entry.afs.add(f1);
-              entry.afs.add(f2);
+          if (state.currentMethodBGroup && state.afBMap.has(state.currentMethodBGroup)) {
+            const entry = state.afBMap.get(state.currentMethodBGroup)!;
+            
+            // Process af1 for Method B
+            let processedAf1 = false;
+            if (isAfFreq(af1)) {
+              const f1 = decodeAf(af1);
+              if (f1) {
+                entry.afs.add(f1);
+                processedAf1 = true;
+              }
+            }
+
+            // Process af2 for Method B
+            let processedAf2 = false;
+            if (isAfFreq(af2)) {
+              const f2 = decodeAf(af2);
+              if (f2) {
+                entry.afs.add(f2);
+                processedAf2 = true;
+              }
+            }
+
+            if (processedAf1 && processedAf2) {
               entry.pairCount++;
+              const f1 = decodeAf(af1);
+              const f2 = decodeAf(af2);
               if (f1 === state.currentMethodBGroup || f2 === state.currentMethodBGroup) {
                 entry.matchCount++;
               }
@@ -1375,7 +1450,7 @@ const App: React.FC = () => {
           state.afType = (validCandidates.length > 1 || (validCandidates.length === 1 && validCandidates[0].pairCount > 0 && (validCandidates[0].matchCount / validCandidates[0].pairCount > 0.35))) ? 'B' : 'A';
         }
       }
-    } else if (groupTypeVal === 16) {
+    } else if (groupTypeVal === 16 && !state.odaList.some(oda => oda.group === '8A' && oda.aid !== 'CD46')) {
       state.hasTmc = true;
       if (tmcActiveRef.current && !tmcPausedRef.current) {
         const tuningFlag = (g2 >> 4) & 0x01;
@@ -1465,7 +1540,7 @@ const App: React.FC = () => {
           }
         }
       }
-    } else if (groupTypeVal === 10 || groupTypeVal === 11) {
+    } else if ((groupTypeVal === 10 || groupTypeVal === 11) && !state.odaList.some(oda => oda.group === (groupTypeVal === 10 ? '5A' : '5B'))) {
       // Group 5A or 5B: TDC (Transparent Data Channel)
       const is5A = groupTypeVal === 10;
       const groupLabel = is5A ? '5A' : '5B';
@@ -1475,7 +1550,8 @@ const App: React.FC = () => {
       
       if (isOdaAssigned) {
         state.hasTdc = false;
-      } else {
+        state.tdcSeenDuringGrace = false;
+      } else if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
         state.hasTdc = true;
         const bytes = [
           (g3 >> 8) & 0xFF,
@@ -1543,8 +1619,10 @@ const App: React.FC = () => {
         
         if (is5A) state.tdcBuffer5A = currentBuffer;
         else state.tdcBuffer5B = currentBuffer;
+      } else {
+        state.tdcSeenDuringGrace = true;
       }
-    } else if (groupTypeVal === 12 || groupTypeVal === 13) {
+    } else if ((groupTypeVal === 12 || groupTypeVal === 13) && !state.odaList.some(oda => oda.group === (groupTypeVal === 12 ? '6A' : '6B'))) {
       // Group 6A or 6B: IH (In House Applications)
       const is6A = groupTypeVal === 12;
       const groupLabel = is6A ? '6A' : '6B';
@@ -1554,7 +1632,8 @@ const App: React.FC = () => {
       
       if (isOdaAssigned) {
         state.hasIh = false;
-      } else {
+        state.ihSeenDuringGrace = false;
+      } else if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
         state.hasIh = true;
         const bytes = [
           (g3 >> 8) & 0xFF,
@@ -1580,6 +1659,8 @@ const App: React.FC = () => {
           state.ihHistoryBuffer.pop();
         }
         state.isDirty = true;
+      } else {
+        state.ihSeenDuringGrace = true;
       }
     } else if (groupTypeVal === 28) {
       state.hasEon = true;
@@ -1696,8 +1777,12 @@ const App: React.FC = () => {
       // If an ODA is assigned to a TDC or IH group, turn off the corresponding indicator
       if (targetGroup === '5A' || targetGroup === '5B') {
         state.hasTdc = false;
+        state.tdcSeenDuringGrace = false;
       } else if (targetGroup === '6A' || targetGroup === '6B') {
         state.hasIh = false;
+        state.ihSeenDuringGrace = false;
+      } else if (targetGroup === '8A' && aid !== 'CD46') {
+        state.hasTmc = false;
       }
 
       if (aid === '0093') {
@@ -2087,7 +2172,9 @@ const App: React.FC = () => {
       let msg = e instanceof Error ? e.message : String(e); 
       if (msg.includes("insecure")) { 
         msg = "This version cannot connect to HTTP servers. Please follow the on-screen instructions."; 
-        setShowSecurityError(true); 
+        if (window.location.protocol === 'https:') {
+          setShowSecurityError(true); 
+        }
       } 
       addLog(`Connection Failed: ${msg}`, 'error'); 
     }
@@ -2148,7 +2235,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#0f172a] text-slate-300 font-sans selection:bg-blue-500/30">
 
       {showSecurityError && (
-        <SecurityErrorModal onClose={() => setShowSecurityError(false)} />
+        <SecurityErrorModal onClose={() => setShowSecurityError(false)} serverUrl={serverUrl} />
       )}
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
         <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
@@ -2320,31 +2407,37 @@ const App: React.FC = () => {
   );
 };
 
-const SecurityErrorModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+const SecurityErrorModal: React.FC<{ onClose: () => void; serverUrl: string }> = ({ onClose, serverUrl }) => (
   <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
-    <div className="bg-slate-900 border-2 border-red-500/50 rounded-lg shadow-2xl w-full max-w-md flex flex-col overflow-hidden relative">
+    <div className="bg-slate-900 border-2 border-red-500/50 rounded-lg shadow-2xl w-full max-w-lg flex flex-col overflow-hidden relative">
       <div className="p-6 text-center space-y-4">
         <div className="w-16 h-16 bg-red-900/20 rounded-full flex items-center justify-center mx-auto border border-red-500/30">
           <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h3 className="text-xl font-bold text-white">Connection Failed</h3>
+        <h3 className="text-xl font-bold text-white">Action required to continue</h3>
         <p className="text-slate-300 text-sm leading-relaxed">
-          Unfortunately, due to web browser security restrictions, this tool can only be used with HTTPS servers.<br /><br />
-          You can bypass this limitation and connect to an HTTP server by using this version hosted by @Bkram:<br />
-          <a href="http://rdsexpert.fmdx-webserver.nl:8080/" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">
-            http://rdsexpert.fmdx-webserver.nl:8080/
-          </a>
+          Unfortunately, due to web browser security restrictions, the HTTPS version of this interface can only be used with HTTPS servers.<br /><br />
+          You can bypass this limitation and connect to the specified HTTP server by using the HTTP version of this interface, hosted by @Bkram.<br /><br />
+          Click the button below to do so. (Opens a new tab)
         </p>
       </div>
-      <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-center">
+      <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-center gap-3">
         <button 
           onClick={onClose} 
           className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded transition-colors uppercase border border-slate-600"
         >
           Close
         </button>
+        <a 
+          href={`http://rdsexpert.fmdx-webserver.nl:8080/?url=${encodeURIComponent(serverUrl)}`} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[11px] md:text-sm font-bold rounded transition-colors uppercase border border-blue-500 shadow-lg shadow-blue-500/20 flex items-center text-center"
+        >
+          SWITCH TO THE HTTP INTERFACE
+        </a>
       </div>
     </div>
   </div>
