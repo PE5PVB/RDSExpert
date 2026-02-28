@@ -454,8 +454,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
             <FlagBadge active={data.hasTmc} label="TMC" alert />
             {/* TDC & IH Indicators - Visible on mobile only here */}
             <div className="md:hidden flex gap-2">
-                <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
                 <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
+                <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
             </div>
         </div>
 
@@ -510,8 +510,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
 
         {/* TDC & IH Indicators - Visible on PC only here */}
         <div className="shrink-0 hidden md:flex items-center justify-center gap-2 bg-slate-900/40 rounded p-2 border border-slate-800/50">
-            <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
             <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
+            <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
         </div>
         
         {/* ECC Box with Tooltip */}
