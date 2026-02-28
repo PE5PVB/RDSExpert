@@ -233,7 +233,7 @@ export const LIC_LANGUAGE_MAP: Record<string, string> = {
     "58": "Pushtu", "57": "Quechua", "56": "Russian", "55": "Rusyn", "54": "Serbo-Croat", "53": "Shona",
     "52": "Sinhalese", "51": "Somali", "50": "Sranan Tongo", "4F": "Swahili", "4E": "Tadzhik",
     "4D": "Tamil", "4C": "Tatar", "4B": "Telugu", "4A": "Thai", "49": "Ukrainian", "48": "Urdu",
-    "47": "Uzbek", "46": "Vietnamese", "45": "Zulu"
+    "47": "Uzbek", "46": "Vietnamese", "45": "Zulu", "40": "Clean feed"
 };
 
 // ECC + PI first nibble → TMC Country ID (CID) and default Table Code (TABCD)
