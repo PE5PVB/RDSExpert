@@ -1802,8 +1802,9 @@ const App: React.FC = () => {
       }
       if (g4 === 0x4BD7 || g4 === 0x4BD8) {
         state.rtPlusOdaGroup = (g2 & 0x1F);
+        if ((state.rtPlusOdaGroup & 1) !== 0) state.hasRtPlus = false;
       }
-    } else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup) {
+    } else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup && (groupTypeVal & 1) === 0) {
       state.hasRtPlus = true;
       const g2Spare = g2 & 0x07;
       state.rtPlusItemToggle = !!((g2 >> 4) & 0x01);
