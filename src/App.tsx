@@ -14,6 +14,8 @@ import {
   RtHistoryItem, 
   TdcHistoryItem,
   IhHistoryItem,
+  RpHistoryItem,
+  ErtHistoryItem,
   LogEntry,
   BandscanEntry
 } from './types';
@@ -66,6 +68,7 @@ interface DecoderState {
   lic: string;
   pin: string;
   localTime: string;
+  localTimeOffset: string | null;
   utcTime: string;
   pty: number;
   ptynAbFlag: boolean;
@@ -81,6 +84,10 @@ interface DecoderState {
   rtPlusTags: Map<number, RtPlusTag & { timestamp: number }>; 
   rtPlusItemRunning: boolean;
   rtPlusItemToggle: boolean;
+  ertPlusOdaGroup: number | null;
+  ertPlusTags: Map<number, RtPlusTag & { timestamp: number }>;
+  ertPlusItemToggle: boolean | null;
+  ertPlusItemRunning: boolean;
   hasOda: boolean;
   odaApp: { 
     name: string; 
@@ -99,8 +106,11 @@ interface DecoderState {
   hasTmc: boolean;
   hasTdc: boolean;
   hasIh: boolean;
+  hasRp: boolean;
+  hasErt: boolean;
   tdcSeenDuringGrace: boolean;
   ihSeenDuringGrace: boolean;
+  rpSeenDuringGrace: boolean;
   hasEws: boolean;
   ewsId: string;
   eonMap: Map<string, EonNetwork>; 
@@ -109,10 +119,30 @@ interface DecoderState {
   tmcProviderBuffer: string[];
   tdcHistoryBuffer: TdcHistoryItem[];
   ihHistoryBuffer: IhHistoryItem[];
+  rpHistoryBuffer: RpHistoryItem[];
+  ertHistoryBuffer: ErtHistoryItem[];
+  ertBuffer: string[];
+  ertMask: boolean[];
+  ertOdaSeen: boolean;
+  ertOdaGroup: string | null;
+  ertLastAbFlag: boolean | null;
+  rpBuffer: string[];
+  rpMessageStarted: boolean;
+  rpPagerId: string;
+  rpLastAbFlag: number | null;
   tdcBuffer5A: string;
   tdcBuffer5B: string;
   lastTdcIndex5A: number;
   lastTdcIndex5B: number;
+
+  // Raw Recording
+  isRawRecording: boolean;
+  rawRecordingBuffer: string[];
+
+  // Raw Playback
+  isPlayingRaw: boolean;
+  rawPlaybackCurrent: number;
+  rawPlaybackTotal: number;
   
   // Analyzer State
   groupCounts: Record<string, number>;
@@ -520,6 +550,8 @@ const App: React.FC = () => {
   const [tmcPaused, setTmcPaused] = useState<boolean>(false);
   const [showTdcHistory, setShowTdcHistory] = useState<boolean>(false);
   const [showIhHistory, setShowIhHistory] = useState<boolean>(false);
+  const [showRpHistory, setShowRpHistory] = useState<boolean>(false);
+  const [showErtHistory, setShowErtHistory] = useState<boolean>(false);
   const tmcPausedRef = useRef<boolean>(false);
   
   const wsRef = useRef<WebSocket | null>(null);
@@ -560,6 +592,7 @@ const App: React.FC = () => {
     lic: "",
     pin: "",
     localTime: "",
+    localTimeOffset: null,
     utcTime: "",
     pty: 0,
     ptynAbFlag: false,
@@ -575,6 +608,10 @@ const App: React.FC = () => {
     rtPlusTags: new Map(),
     rtPlusItemRunning: false,
     rtPlusItemToggle: false,
+    ertPlusOdaGroup: null,
+    ertPlusTags: new Map(),
+    ertPlusItemToggle: null,
+    ertPlusItemRunning: false,
     hasOda: false,
     odaApp: undefined,
     odaList: [],
@@ -583,8 +620,11 @@ const App: React.FC = () => {
     hasTmc: false,
     hasTdc: false,
     hasIh: false,
+    hasRp: false,
+    hasErt: false,
     tdcSeenDuringGrace: false,
     ihSeenDuringGrace: false,
+    rpSeenDuringGrace: false,
     hasEws: false,
     ewsId: "",
     eonMap: new Map<string, EonNetwork>(), 
@@ -599,10 +639,30 @@ const App: React.FC = () => {
     tmcProviderBuffer: new Array(16).fill(' '),
     tdcHistoryBuffer: [],
     ihHistoryBuffer: [],
+    rpHistoryBuffer: [],
+    ertHistoryBuffer: [],
+    ertBuffer: new Array(128).fill(' '),
+    ertMask: new Array(32).fill(false),
+    ertOdaSeen: false,
+    ertOdaGroup: null,
+    ertLastAbFlag: null,
+    rpBuffer: [],
+    rpMessageStarted: false,
+    rpPagerId: "",
+    rpLastAbFlag: null,
     tdcBuffer5A: "",
     tdcBuffer5B: "",
     lastTdcIndex5A: -1,
     lastTdcIndex5B: -1,
+
+    // Raw Recording
+    isRawRecording: false,
+    rawRecordingBuffer: [],
+
+    // Raw Playback
+    isPlayingRaw: false,
+    rawPlaybackCurrent: 0,
+    rawPlaybackTotal: 0,
     
     // Analyzer State
     groupCounts: {},
@@ -1013,6 +1073,9 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const rawPlaybackLinesRef = useRef<string[][]>([]);
+
   const resetTmc = useCallback(() => {
     decoderState.current.tmcBuffer = [];
     decoderState.current.isDirty = true;
@@ -1021,6 +1084,14 @@ const App: React.FC = () => {
   const resetData = useCallback(() => {
     const state = decoderState.current;
     
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+    state.isPlayingRaw = false;
+    state.rawPlaybackCurrent = 0;
+    state.rawPlaybackTotal = 0;
+
     state.currentPi = "----";
     state.piCandidate = "----";
     state.piCounter = 0;
@@ -1048,11 +1119,17 @@ const App: React.FC = () => {
     state.rtPlusTags.clear();
     state.tdcHistoryBuffer = [];
     state.ihHistoryBuffer = [];
+    state.rpHistoryBuffer = [];
+    state.rpBuffer = [];
+    state.rpPagerId = "";
+    state.rpLastAbFlag = null;
     state.tdcBuffer5A = "";
     state.tdcBuffer5B = "";
 
     state.rtPlusItemRunning = false;
     state.rtPlusItemToggle = false;
+    state.ertPlusItemRunning = false;
+    state.ertPlusItemToggle = null;
     state.hasOda = false;
     state.odaApp = undefined;
     state.odaList = [];
@@ -1061,15 +1138,27 @@ const App: React.FC = () => {
     state.hasTmc = false;
     state.hasTdc = false;
     state.hasIh = false;
+    state.hasRp = false;
+    state.hasErt = false;
     state.tdcSeenDuringGrace = false;
     state.ihSeenDuringGrace = false;
+    state.rpSeenDuringGrace = false;
     state.hasEws = false;
     state.ewsId = "";
+
+    state.ertHistoryBuffer = [];
+    state.ertBuffer.fill(' ');
+    state.ertMask.fill(false);
+    state.ertOdaSeen = false;
+    state.ertOdaGroup = null;
+    state.ertLastAbFlag = null;
+    state.ertPlusTags.clear();
 
     state.ecc = "";
     state.lic = "";
     state.pin = "";
     state.localTime = "";
+    state.localTimeOffset = null;
     state.utcTime = "";
     state.pty = 0;
     state.ptynAbFlag = false;
@@ -1085,6 +1174,9 @@ const App: React.FC = () => {
     state.lastGroup0A3 = null;
     state.afType = 'Unknown';
     state.tmcServiceInfo = { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Identifying...]" };
+
+    state.isRawRecording = false;
+    state.rawRecordingBuffer = [];
 
     state.groupCounts = {};
     state.groupTotal = 0;
@@ -1115,6 +1207,9 @@ const App: React.FC = () => {
     const state = decoderState.current;
     state.isDirty = true;
 
+    // Skip decoding if essential blocks are missing
+    if (isNaN(g1) || isNaN(g2)) return;
+
     const piHex = g1.toString(16).toUpperCase().padStart(4, '0');
     
     // Check for TDC/IH grace period expiration
@@ -1130,6 +1225,12 @@ const App: React.FC = () => {
           state.hasIh = true;
         }
         state.ihSeenDuringGrace = false;
+      }
+      if (state.rpSeenDuringGrace) {
+        if (!state.odaList.some(oda => oda.group === '7A')) {
+          state.hasRp = true;
+        }
+        state.rpSeenDuringGrace = false;
       }
     }
 
@@ -1162,6 +1263,7 @@ const App: React.FC = () => {
         state.tmcBuffer = [];
         state.tmcProviderBuffer.fill(' ');
         state.rtPlusTags.clear();
+        state.ertPlusTags.clear();
         state.rtPlusItemRunning = false;
         state.rtPlusItemToggle = false;
         state.hasOda = false;
@@ -1172,15 +1274,26 @@ const App: React.FC = () => {
         state.hasTmc = false;
         state.hasTdc = false;
         state.hasIh = false;
+        state.hasRp = false;
+        state.hasErt = false;
         state.tdcSeenDuringGrace = false;
         state.ihSeenDuringGrace = false;
+        state.rpSeenDuringGrace = false;
         state.hasEws = false;
         state.ewsId = "";
         
+        state.ertHistoryBuffer = [];
+        state.ertBuffer.fill(' ');
+        state.ertMask.fill(false);
+        state.ertOdaSeen = false;
+        state.ertOdaGroup = null;
+        state.ertLastAbFlag = null;
+
         state.ecc = "";
         state.lic = "";
         state.pin = "";
         state.localTime = "";
+        state.localTimeOffset = null;
         state.utcTime = "";
         state.pty = 0;
         state.ptynAbFlag = false;
@@ -1211,6 +1324,11 @@ const App: React.FC = () => {
         state.psHistoryBuffer = [];
         state.rtHistoryBuffer = [];
         state.tdcHistoryBuffer = [];
+        state.rpHistoryBuffer = [];
+        state.ertHistoryBuffer = [];
+        state.rpBuffer = [];
+        state.rpPagerId = "";
+        state.rpLastAbFlag = null;
         state.tdcBuffer5A = "";
         state.tdcBuffer5B = "";
         state.psCandidateString = "        ";
@@ -1249,6 +1367,12 @@ const App: React.FC = () => {
 
     state.groupCounts[groupStr] = (state.groupCounts[groupStr] || 0) + 1;
     state.groupTotal++;
+
+    if (state.isRawRecording) {
+      const hexLine = [g1, g2, g3, g4].map(b => b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
+      state.rawRecordingBuffer.push(hexLine);
+    }
+
     if (analyzerActiveRef.current) {
       state.groupSequence.push(groupStr);
       if (state.groupSequence.length > 3000) { 
@@ -1338,13 +1462,15 @@ const App: React.FC = () => {
         state.diStereo = !!diBit;
       }
 
-      state.psBuffer[address * 2] = String.fromCharCode((g4 >> 8) & 0xFF);
-      state.psBuffer[address * 2 + 1] = String.fromCharCode(g4 & 0xFF);
-      state.psMask[address * 2] = true;
-      state.psMask[address * 2 + 1] = true;
+      if (!isNaN(g4)) {
+        state.psBuffer[address * 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+        state.psBuffer[address * 2 + 1] = String.fromCharCode(g4 & 0xFF);
+        state.psMask[address * 2] = true;
+        state.psMask[address * 2 + 1] = true;
+      }
 
       if (isGroupA) {
-        if (state.lastGroup0A3 !== g3) {
+        if (!isNaN(g3) && state.lastGroup0A3 !== g3) {
           state.lastGroup0A3 = g3;
           const af1 = (g3 >> 8) & 0xFF;
           const af2 = g3 & 0xFF;
@@ -1458,23 +1584,29 @@ const App: React.FC = () => {
         
         if (tuningFlag === 1) {
           if (variant === 0 || variant === 1) {
-            const ltn = (g3 >> 10) & 0x3F;
-            const sid = (g3 >> 2) & 0x3F;
-            if (ltn > 0 || sid > 0) {
-              state.tmcServiceInfo = {
-                ...state.tmcServiceInfo,
-                ltn: ltn,
-                sid: sid,
-                afi: !!((g3 >> 9) & 0x01),
-                mode: (g3 >> 8) & 0x01
-              };
+            if (!isNaN(g3)) {
+              const ltn = (g3 >> 10) & 0x3F;
+              const sid = (g3 >> 2) & 0x3F;
+              if (ltn > 0 || sid > 0) {
+                state.tmcServiceInfo = {
+                  ...state.tmcServiceInfo,
+                  ltn: ltn,
+                  sid: sid,
+                  afi: !!((g3 >> 9) & 0x01),
+                  mode: (g3 >> 8) & 0x01
+                };
+              }
             }
           } else if (variant >= 4 && variant <= 5) {
             const offset = (variant - 4) * 4;
-            state.tmcProviderBuffer[offset] = String.fromCharCode((g3 >> 8) & 0xFF);
-            state.tmcProviderBuffer[offset + 1] = String.fromCharCode(g3 & 0xFF);
-            state.tmcProviderBuffer[offset + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
-            state.tmcProviderBuffer[offset + 3] = String.fromCharCode(g4 & 0xFF);
+            if (!isNaN(g3)) {
+              state.tmcProviderBuffer[offset] = String.fromCharCode((g3 >> 8) & 0xFF);
+              state.tmcProviderBuffer[offset + 1] = String.fromCharCode(g3 & 0xFF);
+            }
+            if (!isNaN(g4)) {
+              state.tmcProviderBuffer[offset + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+              state.tmcProviderBuffer[offset + 3] = String.fromCharCode(g4 & 0xFF);
+            }
             const providerName = state.tmcProviderBuffer.join('').trim();
             if (providerName) {
               state.tmcServiceInfo.providerName = providerName;
@@ -1482,66 +1614,68 @@ const App: React.FC = () => {
           }
         } else {
           const cc = g2 & 0x07;
-          const durationCode = (g3 >> 13) & 0x07;
-          const diversion = !!((g3 >> 12) & 0x01);
-          const direction = !!((g3 >> 11) & 0x01);
-          const eventCode = g3 & 0x07FF; 
-          const location = g4; 
-          
-          if (eventCode === 0 && location === 0) {
-            return;
-          }
+          if (!isNaN(g3) && !isNaN(g4)) {
+            const durationCode = (g3 >> 13) & 0x07;
+            const diversion = !!((g3 >> 12) & 0x01);
+            const direction = !!((g3 >> 11) & 0x01);
+            const eventCode = g3 & 0x07FF; 
+            const location = g4; 
+            
+            if (eventCode === 0 && location === 0) {
+              return;
+            }
 
-          const now = new Date();
-          const durInfo = getDurationLabel(durationCode);
-          let expiresTime = "--:--:--";
-          if (durInfo.minutes > 0) {
-            expiresTime = new Date(now.getTime() + durInfo.minutes * 60000).toLocaleTimeString('fr-FR');
-          } else if (durationCode === 7) {
-            expiresTime = "Indefinite";
-          }
+            const now = new Date();
+            const durInfo = getDurationLabel(durationCode);
+            let expiresTime = "--:--:--";
+            if (durInfo.minutes > 0) {
+              expiresTime = new Date(now.getTime() + durInfo.minutes * 60000).toLocaleTimeString('fr-FR');
+            } else if (durationCode === 7) {
+              expiresTime = "Indefinite";
+            }
 
-          const urgency = getEventUrgency(eventCode);
-          const nature = getEventNature(eventCode);
+            const urgency = getEventUrgency(eventCode);
+            const nature = getEventNature(eventCode);
 
-          const existingIndex = state.tmcBuffer.findIndex((m) => {
-            return m.locationCode === location && m.eventCode === eventCode && m.direction === direction;
-          });
-
-          if (existingIndex !== -1) {
-            const existing = state.tmcBuffer[existingIndex];
-            existing.receivedTime = now.toLocaleTimeString('fr-FR');
-            existing.expiresTime = expiresTime;
-            existing.updateCount = (existing.updateCount || 1) + 1;
-            existing.urgency = urgency;
-            existing.nature = nature;
-          } else {
-            state.tmcBuffer.unshift({
-              id: tmcIdCounter.current++,
-              receivedTime: now.toLocaleTimeString('fr-FR'),
-              expiresTime: expiresTime,
-              isSystem: false,
-              label: getEventCategory(eventCode),
-              cc: cc,
-              eventCode: eventCode,
-              locationCode: location,
-              extent: 0,
-              durationCode: durationCode,
-              direction: direction,
-              diversion: diversion,
-              urgency: urgency, 
-              nature: nature,
-              durationLabel: durInfo.label,
-              updateCount: 1
+            const existingIndex = state.tmcBuffer.findIndex((m) => {
+              return m.locationCode === location && m.eventCode === eventCode && m.direction === direction;
             });
-            if (state.tmcBuffer.length > 500) {
-              state.tmcBuffer.pop();
+
+            if (existingIndex !== -1) {
+              const existing = state.tmcBuffer[existingIndex];
+              existing.receivedTime = now.toLocaleTimeString('fr-FR');
+              existing.expiresTime = expiresTime;
+              existing.updateCount = (existing.updateCount || 1) + 1;
+              existing.urgency = urgency;
+              existing.nature = nature;
+            } else {
+              state.tmcBuffer.unshift({
+                id: tmcIdCounter.current++,
+                receivedTime: now.toLocaleTimeString('fr-FR'),
+                expiresTime: expiresTime,
+                isSystem: false,
+                label: getEventCategory(eventCode),
+                cc: cc,
+                eventCode: eventCode,
+                locationCode: location,
+                extent: 0,
+                durationCode: durationCode,
+                direction: direction,
+                diversion: diversion,
+                urgency: urgency, 
+                nature: nature,
+                durationLabel: durInfo.label,
+                updateCount: 1
+              });
+              if (state.tmcBuffer.length > 500) {
+                state.tmcBuffer.pop();
+              }
             }
           }
         }
       }
     } else if ((groupTypeVal === 10 || groupTypeVal === 11) && !state.odaList.some(oda => oda.group === (groupTypeVal === 10 ? '5A' : '5B'))) {
-      // Group 5A or 5B: TDC (Transparent Data Channel)
+      // Group 5A or 5B: TDC (Transparent Data Channels)
       const is5A = groupTypeVal === 10;
       const groupLabel = is5A ? '5A' : '5B';
       
@@ -1553,72 +1687,77 @@ const App: React.FC = () => {
         state.tdcSeenDuringGrace = false;
       } else if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
         state.hasTdc = true;
-        const bytes = [
-          (g3 >> 8) & 0xFF,
-          g3 & 0xFF,
-          (g4 >> 8) & 0xFF,
-          g4 & 0xFF
-        ];
-        
-        let currentBuffer = is5A ? state.tdcBuffer5A : state.tdcBuffer5B;
-        let lastIndex = is5A ? state.lastTdcIndex5A : state.lastTdcIndex5B;
-        const tdcIndex = g2 & 0x1F;
+        if (!isNaN(g3) && !isNaN(g4)) {
+          const bytes = [
+            (g3 >> 8) & 0xFF,
+            g3 & 0xFF,
+            (g4 >> 8) & 0xFF,
+            g4 & 0xFF
+          ];
+          
+          let currentBuffer = is5A ? state.tdcBuffer5A : state.tdcBuffer5B;
+          let lastIndex = is5A ? state.lastTdcIndex5A : state.lastTdcIndex5B;
+          const tdcIndex = g2 & 0x1F;
 
-        // Detection of message start/end via index rollover (e.g. F -> 0)
-        // We trigger a new line if the index has wrapped around and we have data
-        if (tdcIndex < lastIndex && currentBuffer.trim().length > 0) {
-          state.tdcHistoryBuffer.unshift({
-            time: new Date().toLocaleTimeString('fr-FR'),
-            text: currentBuffer,
-            group: groupLabel
-          });
-          if (state.tdcHistoryBuffer.length > 500) {
-            state.tdcHistoryBuffer.pop();
-          }
-          state.isDirty = true;
-          currentBuffer = "";
-        }
-        
-        if (is5A) state.lastTdcIndex5A = tdcIndex;
-        else state.lastTdcIndex5B = tdcIndex;
-
-        for (const b of bytes) {
-          // Split on NULL (0x00), LF (0x0A), CR (0x0D), ETX (0x03), or EOT (0x04)
-          if (b === 0x00 || b === 0x0A || b === 0x0D || b === 0x03 || b === 0x04) {
-            if (currentBuffer.trim().length > 0) {
-              state.tdcHistoryBuffer.unshift({
-                time: new Date().toLocaleTimeString('fr-FR'),
-                text: currentBuffer,
-                group: groupLabel
-              });
-              if (state.tdcHistoryBuffer.length > 500) {
-                state.tdcHistoryBuffer.pop();
-              }
-              state.isDirty = true;
+          // Detection of message start/end via index rollover (e.g. F -> 0)
+          // We trigger a new line if the index has wrapped around and we have data
+          if (tdcIndex < lastIndex && currentBuffer.trim().length > 0) {
+            state.tdcHistoryBuffer.unshift({
+              time: new Date().toLocaleTimeString('fr-FR'),
+              text: currentBuffer,
+              group: groupLabel,
+              channel: lastIndex
+            });
+            if (state.tdcHistoryBuffer.length > 500) {
+              state.tdcHistoryBuffer.pop();
             }
+            state.isDirty = true;
             currentBuffer = "";
-          } else if ((b >= 0x20 && b <= 0xFF) || b === 0x09) { // Printable RDS or Tab
-            const char = decodeRdsByte(b);
-            currentBuffer += char;
+          }
+          
+          if (is5A) state.lastTdcIndex5A = tdcIndex;
+          else state.lastTdcIndex5B = tdcIndex;
 
-            // Safety: if buffer gets too long without terminator, push it
-            if (currentBuffer.length > 1024) {
-              state.tdcHistoryBuffer.unshift({
-                time: new Date().toLocaleTimeString('fr-FR'),
-                text: currentBuffer,
-                group: groupLabel
-              });
-              if (state.tdcHistoryBuffer.length > 500) {
-                state.tdcHistoryBuffer.pop();
+          for (const b of bytes) {
+            // Split on NULL (0x00), LF (0x0A), CR (0x0D), ETX (0x03), or EOT (0x04)
+            if (b === 0x00 || b === 0x0A || b === 0x0D || b === 0x03 || b === 0x04) {
+              if (currentBuffer.trim().length > 0) {
+                state.tdcHistoryBuffer.unshift({
+                  time: new Date().toLocaleTimeString('fr-FR'),
+                  text: currentBuffer,
+                  group: groupLabel,
+                  channel: tdcIndex
+                });
+                if (state.tdcHistoryBuffer.length > 500) {
+                  state.tdcHistoryBuffer.pop();
+                }
+                state.isDirty = true;
               }
               currentBuffer = "";
-              state.isDirty = true;
+            } else if ((b >= 0x20 && b <= 0xFF) || b === 0x09) { // Printable RDS or Tab
+              const char = decodeRdsByte(b);
+              currentBuffer += char;
+
+              // Safety: if buffer gets too long without terminator, push it
+              if (currentBuffer.length > 1024) {
+                state.tdcHistoryBuffer.unshift({
+                  time: new Date().toLocaleTimeString('fr-FR'),
+                  text: currentBuffer,
+                  group: groupLabel,
+                  channel: tdcIndex
+                });
+                if (state.tdcHistoryBuffer.length > 500) {
+                  state.tdcHistoryBuffer.pop();
+                }
+                currentBuffer = "";
+                state.isDirty = true;
+              }
             }
           }
+          
+          if (is5A) state.tdcBuffer5A = currentBuffer;
+          else state.tdcBuffer5B = currentBuffer;
         }
-        
-        if (is5A) state.tdcBuffer5A = currentBuffer;
-        else state.tdcBuffer5B = currentBuffer;
       } else {
         state.tdcSeenDuringGrace = true;
       }
@@ -1635,105 +1774,231 @@ const App: React.FC = () => {
         state.ihSeenDuringGrace = false;
       } else if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
         state.hasIh = true;
-        const bytes = [
-          (g3 >> 8) & 0xFF,
-          g3 & 0xFF,
-          (g4 >> 8) & 0xFF,
-          g4 & 0xFF
-        ];
-        
-        // Formats: Decimal and Hexadecimal
-        const hexStr = bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
-        const decStr = bytes.map(b => b.toString().padStart(3, '0')).join(' ');
-        const asciiStr = bytes.map(b => (b >= 0x20 && b <= 0xFF) ? decodeRdsByte(b) : '.').join('');
-        
-        const combinedText = `HEX: ${hexStr} | DEC: ${decStr} | ASC: ${asciiStr}`;
-        
-        state.ihHistoryBuffer.unshift({
-          time: new Date().toLocaleTimeString('fr-FR'),
-          text: combinedText,
-          group: groupLabel
-        });
-        
-        if (state.ihHistoryBuffer.length > 500) {
-          state.ihHistoryBuffer.pop();
+        if (!isNaN(g3) && !isNaN(g4)) {
+          const bytes = [
+            (g3 >> 8) & 0xFF,
+            g3 & 0xFF,
+            (g4 >> 8) & 0xFF,
+            g4 & 0xFF
+          ];
+          
+          // Formats: Decimal and Hexadecimal
+          const hexStr = bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+          const decStr = bytes.map(b => b.toString().padStart(3, '0')).join(' ');
+          const asciiStr = bytes.map(b => (b >= 0x20 && b <= 0xFF) ? decodeRdsByte(b) : '.').join('');
+          
+          const combinedText = `HEX: ${hexStr} | DEC: ${decStr} | ASC: ${asciiStr}`;
+          
+          state.ihHistoryBuffer.unshift({
+            time: new Date().toLocaleTimeString('fr-FR'),
+            text: combinedText,
+            group: groupLabel,
+            channel: g2 & 0x1F
+          });
+          
+          if (state.ihHistoryBuffer.length > 500) {
+            state.ihHistoryBuffer.pop();
+          }
+          state.isDirty = true;
         }
-        state.isDirty = true;
       } else {
         state.ihSeenDuringGrace = true;
       }
-    } else if (groupTypeVal === 28) {
-      state.hasEon = true;
-      const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
-      if (!state.eonMap.has(eonPi)) {
-        state.eonMap.set(eonPi, {
-          pi: eonPi, 
-          ps: "        ", 
-          psBuffer: new Array(8).fill(' '), 
-          tp: false, 
-          ta: false, 
-          pty: 0, 
-          pin: "", 
-          linkageInfo: "", 
-          af: [], 
-          mappedFreqs: [], 
-          lastUpdate: Date.now()
-        });
-      }
-      const network = state.eonMap.get(eonPi)!;
-      network.lastUpdate = Date.now();
-      network.tp = !!((g2 >> 4) & 0x01);
-      const variant = g2 & 0x0F;
-      if (variant >= 0 && variant <= 3) {
-        network.psBuffer[variant * 2] = String.fromCharCode((g3 >> 8) & 0xFF);
-        network.psBuffer[variant * 2 + 1] = String.fromCharCode(g3 & 0xFF);
-        network.ps = renderRdsBuffer(network.psBuffer);
-      } else if (variant === 4) {
-        const f1 = decodeAf((g3 >> 8) & 0xFF);
-        const f2 = decodeAf(g3 & 0xFF);
-        if (f1 && !network.af.includes(f1)) {
-          network.af.push(f1);
-        }
-        if (f2 && !network.af.includes(f2)) {
-          network.af.push(f2);
-        }
-        network.af.sort((a,b) => parseFloat(a) - parseFloat(b));
-      } else if (variant >= 5 && variant <= 9) {
-        const fMain = decodeAf(g3 >> 8);
-        const fMapped = decodeAf(g3 & 0xFF);
-        if (fMain && fMapped) {
-          const mapStr = `${fMain} -> ${fMapped}`;
-          if (!network.mappedFreqs.includes(mapStr)) {
-            network.mappedFreqs.push(mapStr);
-            if (network.mappedFreqs.length > 10) {
-              network.mappedFreqs.shift();
+    } else if (groupTypeVal === 14 && !state.odaList.some(oda => oda.group === '7A')) {
+      // Group 7A: RP (Radio Paging)
+      const groupLabel = '7A';
+      
+      // Check if this group is already assigned to an ODA application
+      const isOdaAssigned = state.odaList.some(oda => oda.group === groupLabel);
+      
+      if (isOdaAssigned) {
+        state.hasRp = false;
+        state.rpSeenDuringGrace = false;
+      } else if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+        state.hasRp = true;
+        if (!isNaN(g3) && !isNaN(g4)) {
+          const abFlag = (g2 >> 4) & 0x01;
+          const addr = g2 & 0x0F;
+          
+          // Detect new call
+          if (state.rpLastAbFlag !== null && state.rpLastAbFlag !== abFlag) {
+            state.rpBuffer = [];
+            state.rpMessageStarted = false;
+            state.rpPagerId = "";
+          }
+          state.rpLastAbFlag = abFlag;
+
+          let pagingType: 'Numeric' | 'Alphanumeric' | 'Unknown' = 'Unknown';
+          let pagerId = "";
+          let fullText = "";
+
+          if (addr >= 2 && addr <= 6) {
+            pagingType = 'Numeric';
+          } else if (addr >= 8 && addr <= 15) {
+            pagingType = 'Alphanumeric';
+            if (addr === 8) {
+              const y1 = (g3 >> 12) & 0x0F;
+              const y2 = (g3 >> 8) & 0x0F;
+              const z1 = (g3 >> 4) & 0x0F;
+              const z2 = g3 & 0x0F;
+              const z3 = (g4 >> 12) & 0x0F;
+              const z4 = (g4 >> 8) & 0x0F;
+              pagerId = `${y1}${y2}${z1}${z2}${z3}${z4}`;
+              state.rpPagerId = pagerId;
+              state.rpBuffer = [];
+              state.rpMessageStarted = false;
+            } else if (addr >= 9 && addr <= 14) {
+              const bytes = [
+                (g3 >> 8) & 0xFF,
+                g3 & 0xFF,
+                (g4 >> 8) & 0xFF,
+                g4 & 0xFF
+              ];
+              
+              for (const b of bytes) {
+                const charCode = b & 0x7F;
+                // Control characters 0x0F (SI) or 0x15 (NAK) often mark the start of alphanumeric text
+                if (charCode === 0x0F || charCode === 0x15) {
+                  state.rpMessageStarted = true;
+                  continue;
+                }
+                
+                if (state.rpMessageStarted) {
+                  if (charCode >= 0x20 && charCode <= 0x7E) {
+                    state.rpBuffer.push(String.fromCharCode(charCode));
+                  }
+                }
+              }
+            } else if (addr === 15) {
+              fullText = state.rpBuffer.join('');
             }
           }
+
+          const bytes = [
+            (g3 >> 8) & 0xFF,
+            g3 & 0xFF,
+            (g4 >> 8) & 0xFF,
+            g4 & 0xFF
+          ];
+          
+          const hexStr = bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+          const asciiStr = bytes.map(b => (b >= 0x20 && b <= 0xFF) ? decodeRdsByte(b) : '.').join('');
+          
+          let combinedText = `FLAG: ${abFlag} | ADDR: ${addr.toString(2).padStart(4, '0')} | HEX: ${hexStr} | ASC: ${asciiStr}`;
+          if (fullText) {
+            combinedText = `[MSG] ${fullText}`;
+          } else if (pagingType === 'Alphanumeric' && addr === 8) {
+            combinedText = `[PAGER ID] ${state.rpPagerId}`;
+          }
+
+          state.rpHistoryBuffer.unshift({
+            time: new Date().toLocaleTimeString('fr-FR'),
+            text: combinedText,
+            group: '7A',
+            address: addr,
+            abFlag: abFlag,
+            type: pagingType,
+            pagerId: state.rpPagerId
+          });
+          
+          if (state.rpHistoryBuffer.length > 500) {
+            state.rpHistoryBuffer.pop();
+          }
+          state.isDirty = true;
         }
-      } else if (variant === 12) {
-        network.linkageInfo = g3.toString(16).toUpperCase().padStart(4, '0');
-      } else if (variant === 13) {
-        network.pty = (g3 >> 11) & 0x1F;
-        network.ta = !!(g3 & 0x01);
-      } else if (variant === 14) {
-        if (((g3 >> 11) & 0x1F) !== 0) {
-          network.pin = `${(g3 >> 11) & 0x1F}. ${pad((g3 >> 6) & 0x1F)}:${pad(g3 & 0x3F)}`;
+      } else {
+        state.rpSeenDuringGrace = true;
+      }
+    } else if (groupTypeVal === 28) {
+      if (!isNaN(g4)) {
+        state.hasEon = true;
+        const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
+        if (!state.eonMap.has(eonPi)) {
+          state.eonMap.set(eonPi, {
+            pi: eonPi, 
+            ps: "        ", 
+            psBuffer: new Array(8).fill(' '), 
+            tp: false, 
+            ta: false, 
+            pty: 0, 
+            pin: "", 
+            linkageInfo: "", 
+            af: [], 
+            mappedFreqs: [], 
+            lastUpdate: Date.now()
+          });
+        }
+        const network = state.eonMap.get(eonPi)!;
+        network.lastUpdate = Date.now();
+        network.tp = !!((g2 >> 4) & 0x01);
+        const variant = g2 & 0x0F;
+        if (variant >= 0 && variant <= 3) {
+          if (!isNaN(g3)) {
+            network.psBuffer[variant * 2] = String.fromCharCode((g3 >> 8) & 0xFF);
+            network.psBuffer[variant * 2 + 1] = String.fromCharCode(g3 & 0xFF);
+            network.ps = renderRdsBuffer(network.psBuffer);
+          }
+        } else if (variant === 4) {
+          if (!isNaN(g3)) {
+            const f1 = decodeAf((g3 >> 8) & 0xFF);
+            const f2 = decodeAf(g3 & 0xFF);
+            if (f1 && !network.af.includes(f1)) {
+              network.af.push(f1);
+            }
+            if (f2 && !network.af.includes(f2)) {
+              network.af.push(f2);
+            }
+            network.af.sort((a,b) => parseFloat(a) - parseFloat(b));
+          }
+        } else if (variant >= 5 && variant <= 9) {
+          if (!isNaN(g3)) {
+            const fMain = decodeAf(g3 >> 8);
+            const fMapped = decodeAf(g3 & 0xFF);
+            if (fMain && fMapped) {
+              const mapStr = `${fMain} -> ${fMapped}`;
+              if (!network.mappedFreqs.includes(mapStr)) {
+                network.mappedFreqs.push(mapStr);
+                if (network.mappedFreqs.length > 10) {
+                  network.mappedFreqs.shift();
+                }
+              }
+            }
+          }
+        } else if (variant === 12) {
+          if (!isNaN(g3)) {
+            network.linkageInfo = g3.toString(16).toUpperCase().padStart(4, '0');
+          }
+        } else if (variant === 13) {
+          if (!isNaN(g3)) {
+            network.pty = (g3 >> 11) & 0x1F;
+            network.ta = !!(g3 & 0x01);
+          }
+        } else if (variant === 14) {
+          if (!isNaN(g3)) {
+            if (g3 !== 0) {
+              network.pin = `${(g3 >> 11) & 0x1F}. ${pad((g3 >> 6) & 0x1F)}:${pad(g3 & 0x3F)}`;
+            }
+          }
         }
       }
     } else if (groupTypeVal === 2 || groupTypeVal === 3) {
       if (groupTypeVal === 2) {
-        const variant = (g3 >> 12) & 0x0F;
-        if (variant === 0) {
-          state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-        } else if (variant === 3) {
-          state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-        } else if (variant === 7) {
-          state.hasEws = true;
-          state.ewsId = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+        if (!isNaN(g3)) {
+          const variant = (g3 >> 12) & 0x0F;
+          if (variant === 0) {
+            state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+          } else if (variant === 3) {
+            state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+          } else if (variant === 7) {
+            state.hasEws = true;
+            state.ewsId = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+          }
         }
       }
-      if (((g4 >> 11) & 0x1F) !== 0) {
-        state.pin = `${(g4 >> 11) & 0x1F}. ${pad((g4 >> 6) & 0x1F)}:${pad(g4 & 0x3F)}`;
+      if (!isNaN(g4)) {
+        if (g4 !== 0) {
+          state.pin = `${(g4 >> 11) & 0x1F}. ${pad((g4 >> 6) & 0x1F)}:${pad(g4 & 0x3F)}`;
+        }
       }
     } else if (groupTypeVal === 4 || groupTypeVal === 5) {
       const textAbFlag = !!((g2 >> 4) & 0x01); 
@@ -1756,53 +2021,173 @@ const App: React.FC = () => {
       if (isGroup2A) {
         const idx = address * 4;
         if (idx < 64) {
-          target[idx] = String.fromCharCode((g3 >> 8) & 0xFF); mask[idx] = true;
-          target[idx+1] = String.fromCharCode(g3 & 0xFF); mask[idx+1] = true;
-          target[idx+2] = String.fromCharCode((g4 >> 8) & 0xFF); mask[idx+2] = true;
-          target[idx+3] = String.fromCharCode(g4 & 0xFF); mask[idx+3] = true;
+          if (!isNaN(g3)) {
+            target[idx] = String.fromCharCode((g3 >> 8) & 0xFF); mask[idx] = true;
+            target[idx+1] = String.fromCharCode(g3 & 0xFF); mask[idx+1] = true;
+          }
+          if (!isNaN(g4)) {
+            target[idx+2] = String.fromCharCode((g4 >> 8) & 0xFF); mask[idx+2] = true;
+            target[idx+3] = String.fromCharCode(g4 & 0xFF); mask[idx+3] = true;
+          }
         }
       } else {
         const idx = address * 2;
         if (idx < 32) { 
-          target[idx] = String.fromCharCode((g4 >> 8) & 0xFF); mask[idx] = true;
-          target[idx+1] = String.fromCharCode(g4 & 0xFF); mask[idx+1] = true;
+          if (!isNaN(g4)) {
+            target[idx] = String.fromCharCode((g4 >> 8) & 0xFF); mask[idx] = true;
+            target[idx+1] = String.fromCharCode(g4 & 0xFF); mask[idx+1] = true;
+          }
         }
       }
     } else if (groupTypeVal === 6) {
       state.hasOda = true; 
-      const aid = g4.toString(16).toUpperCase().padStart(4, '0');
-      const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
-      const odaName = ODA_MAP[aid] || "Unknown ODA";
+      if (!isNaN(g4)) {
+        const aid = g4.toString(16).toUpperCase().padStart(4, '0');
+        const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
+        const odaName = ODA_MAP[aid] || "Unknown ODA";
 
-      // If an ODA is assigned to a TDC or IH group, turn off the corresponding indicator
-      if (targetGroup === '5A' || targetGroup === '5B') {
-        state.hasTdc = false;
-        state.tdcSeenDuringGrace = false;
-      } else if (targetGroup === '6A' || targetGroup === '6B') {
-        state.hasIh = false;
-        state.ihSeenDuringGrace = false;
-      } else if (targetGroup === '8A' && aid !== 'CD46') {
-        state.hasTmc = false;
-      }
+        // If an ODA is assigned to a TDC or IH group, turn off the corresponding indicator
+        if (targetGroup === '5A' || targetGroup === '5B') {
+          state.hasTdc = false;
+          state.tdcSeenDuringGrace = false;
+        } else if (targetGroup === '6A' || targetGroup === '6B') {
+          state.hasIh = false;
+          state.ihSeenDuringGrace = false;
+        } else if (targetGroup === '7A') {
+          state.hasRp = false;
+          state.rpSeenDuringGrace = false;
+        } else if (targetGroup === '8A' && aid !== 'CD46') {
+          state.hasTmc = false;
+        }
 
-      if (aid === '0093') {
-          state.dabTargetGroup = targetGroup;
-      }
+        if (aid === '0093') {
+            state.dabTargetGroup = targetGroup;
+        }
 
-      const newOda = { name: odaName, aid: aid, group: targetGroup, extra: (aid === '0093' ? state.dabExtraInfo : undefined) };
-      state.odaApp = newOda;
-      const eIdx = state.odaList.findIndex((o) => o.aid === aid);
-      if (eIdx !== -1) {
-        state.odaList[eIdx] = newOda;
-      } else {
-        state.odaList.unshift(newOda);
-        if (state.odaList.length > 5) {
-          state.odaList.pop();
+        const newOda = { name: odaName, aid: aid, group: targetGroup, extra: (aid === '0093' ? state.dabExtraInfo : undefined) };
+        state.odaApp = newOda;
+        const eIdx = state.odaList.findIndex((o) => o.aid === aid);
+        if (eIdx !== -1) {
+          state.odaList[eIdx] = newOda;
+        } else {
+          state.odaList.unshift(newOda);
+          if (state.odaList.length > 5) {
+            state.odaList.pop();
+          }
+        }
+        if (g4 === 0x4BD7) {
+          state.rtPlusOdaGroup = (g2 & 0x1F);
+          if ((state.rtPlusOdaGroup & 1) !== 0) state.hasRtPlus = false;
+        }
+        if (g4 === 0x4BD8) {
+          state.ertPlusOdaGroup = (g2 & 0x1F);
+        }
+        if (aid === '6552') {
+          state.ertOdaSeen = true;
+          state.ertOdaGroup = targetGroup;
         }
       }
-      if (g4 === 0x4BD7 || g4 === 0x4BD8) {
-        state.rtPlusOdaGroup = (g2 & 0x1F);
-        if ((state.rtPlusOdaGroup & 1) !== 0) state.hasRtPlus = false;
+    } else if (state.ertOdaSeen && state.ertOdaGroup && groupStr === state.ertOdaGroup) {
+      state.hasErt = true;
+      const archiveErt = () => {
+        // Find the segment containing 0x0D (CR) to determine the logical end of the message
+        let endCharIdx = -1;
+        for (let i = 0; i < 128; i++) {
+          if (state.ertBuffer[i] === '\x0D') {
+            endCharIdx = i;
+            break;
+          }
+        }
+        
+        if (endCharIdx === -1) return; // No end marker yet, message is definitely incomplete
+        
+        const endSegment = Math.floor(endCharIdx / 4);
+        
+        // Verification: Ensure all segments from 0 to endSegment have been received
+        // This prevents archiving incomplete messages when segments arrive out of order
+        for (let i = 0; i <= endSegment; i++) {
+          if (!state.ertMask[i]) return; 
+        }
+
+        const fullMsg = state.ertBuffer.join('').split('\x0D')[0].trim();
+        if (fullMsg.length > 0) {
+          const last = state.ertHistoryBuffer[0];
+          if (!last || last.text !== fullMsg) {
+            // Re-resolve tags from the final message to ensure completeness (e.g. Alok instead of Alo)
+            const resolvedTags = Array.from(state.ertPlusTags.values()).map((tag: any) => {
+              const length = tag.length + 1;
+              let text = "";
+              if (tag.start < fullMsg.length) {
+                text = fullMsg.substring(tag.start, tag.start + length).replace(/[\x00-\x1F]/g, '').trim();
+              }
+              return { ...tag, text };
+            }).filter(t => t.text.length > 0);
+
+            state.ertHistoryBuffer.unshift({
+              time: new Date().toLocaleTimeString('fr-FR'),
+              text: fullMsg,
+              group: groupStr,
+              tags: resolvedTags
+            });
+            if (state.ertHistoryBuffer.length > 500) state.ertHistoryBuffer.pop();
+            state.isDirty = true;
+          }
+        }
+      };
+      if (!isNaN(g3) && !isNaN(g4)) {
+        const abFlag = !!((g2 >> 9) & 0x01);
+        const address = g2 & 0x1F;
+        
+        // Ensure we don't process eRT+ tag groups as eRT text if they share the same group ID
+        if (state.ertPlusOdaGroup !== null && address === state.ertPlusOdaGroup) {
+          // This is an eRT+ tag group, skip text processing
+        } else {
+          if (state.ertLastAbFlag !== null && state.ertLastAbFlag !== abFlag) {
+            archiveErt();
+            state.ertBuffer.fill(' ');
+            state.ertMask.fill(false);
+            state.ertPlusTags.clear();
+          }
+          state.ertLastAbFlag = abFlag;
+
+          // Reset buffer and tags if we see a new message start (address 0) 
+          // while the buffer still contains the end marker of a previous message.
+          // This handles stations that don't toggle the A/B flag correctly.
+          if (address === 0 && state.ertBuffer.includes('\x0D')) {
+            state.ertBuffer.fill(' ');
+            state.ertMask.fill(false);
+            state.ertPlusTags.clear();
+          }
+
+          const bytes = [
+            (g3 >> 8) & 0xFF,
+            g3 & 0xFF,
+            (g4 >> 8) & 0xFF,
+            g4 & 0xFF
+          ];
+
+          let segmentText = "";
+          let endReached = false;
+          for (const b of bytes) {
+            segmentText += decodeRdsByte(b);
+            if (b === 0x0D) {
+              endReached = true;
+              break;
+            }
+          }
+
+          const startIdx = address * 4;
+          for (let i = 0; i < segmentText.length; i++) {
+            if (startIdx + i < 128) {
+              state.ertBuffer[startIdx + i] = segmentText[i];
+            }
+          }
+          state.ertMask[address] = true;
+
+          if (endReached) {
+            archiveErt();
+          }
+        }
       }
     } else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup && (groupTypeVal & 1) === 0) {
       state.hasRtPlus = true;
@@ -1831,13 +2216,17 @@ const App: React.FC = () => {
           }
         }
       };
-      const t1Id = (g2Spare << 3) | ((g3 >> 13) & 0x07);
-      if (t1Id !== 0 && ((g3 >> 7) & 0x3F) + ((g3 >> 1) & 0x3F) < 70) {
-        processTag(t1Id, (g3 >> 7) & 0x3F, (g3 >> 1) & 0x3F);
-      }
-      const t2Id = ((g3 & 0x01) << 5) | ((g4 >> 11) & 0x1F);
-      if (t2Id !== 0 && ((g4 >> 5) & 0x3F) + (g4 & 0x1F) < 70) {
-        processTag(t2Id, (g4 >> 5) & 0x3F, g4 & 0x1F);
+      if (!isNaN(g3)) {
+        const t1Id = (g2Spare << 3) | ((g3 >> 13) & 0x07);
+        if (t1Id !== 0 && ((g3 >> 7) & 0x3F) + ((g3 >> 1) & 0x3F) < 70) {
+          processTag(t1Id, (g3 >> 7) & 0x3F, (g3 >> 1) & 0x3F);
+        }
+        if (!isNaN(g4)) {
+          const t2Id = ((g3 & 0x01) << 5) | ((g4 >> 11) & 0x1F);
+          if (t2Id !== 0 && ((g4 >> 5) & 0x3F) + (g4 & 0x1F) < 70) {
+            processTag(t2Id, (g4 >> 5) & 0x3F, g4 & 0x1F);
+          }
+        }
       }
       if (state.rtPlusTags.size > 6) {
         const sortedTags = (Array.from(state.rtPlusTags.values()) as Array<RtPlusTag & { timestamp: number }>).sort((a, b) => a.timestamp - b.timestamp);
@@ -1848,15 +2237,80 @@ const App: React.FC = () => {
           }
         }
       }
+    } else if (state.ertPlusOdaGroup !== null && groupTypeVal === state.ertPlusOdaGroup && (groupTypeVal & 1) === 0) {
+      const ertPlusItemToggle = !!((g2 >> 4) & 0x01);
+      state.ertPlusItemRunning = !!((g2 >> 3) & 0x01);
+      
+      // Clear tags if the Item Toggle Bit changes, as per eRT+ specification
+      if (state.ertPlusItemToggle !== null && state.ertPlusItemToggle !== ertPlusItemToggle) {
+        state.ertPlusTags.clear();
+      }
+      state.ertPlusItemToggle = ertPlusItemToggle;
+      
+      const g2Spare = g2 & 0x07;
+      const processErtTag = (id: number, start: number, len: number) => {
+        if (id === 0) return;
+        const ertStr = state.ertBuffer.join('').split('\x0D')[0];
+        const length = len + 1;
+        // Always store the tag definition, even if text is currently incomplete
+        let text = "";
+        if (start < ertStr.length) {
+          text = ertStr.substring(start, start + length).replace(/[\x00-\x1F]/g, '').trim();
+        }
+        state.ertPlusTags.set(id, {
+          contentType: id,
+          start: start,
+          length: len,
+          label: RT_PLUS_LABELS[id] || `TAG ${id}`,
+          text: text,
+          isCached: false,
+          timestamp: Date.now()
+        });
+        state.isDirty = true;
+      };
+      if (!isNaN(g3)) {
+        const t1Id = (g2Spare << 3) | ((g3 >> 13) & 0x07);
+        if (t1Id !== 0 && ((g3 >> 7) & 0x3F) + ((g3 >> 1) & 0x3F) < 128) {
+          processErtTag(t1Id, (g3 >> 7) & 0x3F, (g3 >> 1) & 0x3F);
+        }
+        if (!isNaN(g4)) {
+          const t2Id = ((g3 & 0x01) << 5) | ((g4 >> 11) & 0x1F);
+          if (t2Id !== 0 && ((g4 >> 5) & 0x3F) + (g4 & 0x1F) < 128) {
+            processErtTag(t2Id, (g4 >> 5) & 0x3F, g4 & 0x1F);
+          }
+        }
+      }
+      if (state.ertPlusTags.size > 10) {
+        const sortedTags = (Array.from(state.ertPlusTags.values()) as Array<RtPlusTag & { timestamp: number }>).sort((a, b) => a.timestamp - b.timestamp);
+        while (state.ertPlusTags.size > 10) {
+          const oldestKey = sortedTags.shift()?.contentType;
+          if (oldestKey !== undefined) state.ertPlusTags.delete(oldestKey);
+        }
+      }
     } else if (groupTypeVal === 8) {
-      const date = convertMjd(((g2 & 0x03) << 15) | ((g3 & 0xFFFE) >> 1));
-      if (date) {
-        const g4TR = ((g3 & 0x01) << 15) | (g4 >>> 1);
-        const h = (g4TR >>> 11) & 0x1F;
-        const m = (g4TR >> 5) & 0x3F;
-        state.utcTime = `${pad(date.day)}/${pad(date.month)}/${date.year} ${pad(h)}:${pad(m)}`;
-        const lDate = new Date(Date.UTC(date.year, date.month - 1, date.day, h, m) + (g4 & 0x1F) * 30 * 60 * 1000 * (((g4 >> 5) & 0x01) === 1 ? -1 : 1));
-        state.localTime = `${pad(lDate.getUTCDate())}/${pad(lDate.getUTCMonth() + 1)}/${lDate.getUTCFullYear()} ${pad(lDate.getUTCHours())}:${pad(lDate.getUTCMinutes())}`;
+      if (!isNaN(g2) && !isNaN(g3)) {
+        const date = convertMjd(((g2 & 0x03) << 15) | ((g3 & 0xFFFE) >> 1));
+        if (date) {
+          if (!isNaN(g4)) {
+            const g4TR = ((g3 & 0x01) << 15) | (g4 >>> 1);
+            const h = (g4TR >>> 11) & 0x1F;
+            const m = (g4TR >> 5) & 0x3F;
+            state.utcTime = `${pad(date.day)}/${pad(date.month)}/${date.year} ${pad(h)}:${pad(m)}`;
+            const offsetHalfHours = g4 & 0x1F;
+            const isNegative = ((g4 >> 5) & 0x01) === 1;
+            if (offsetHalfHours <= 24) {
+              const offsetTotalMinutes = offsetHalfHours * 30;
+              const offsetHours = Math.floor(offsetTotalMinutes / 60);
+              const offsetMinutes = offsetTotalMinutes % 60;
+              state.localTimeOffset = `Offset: ${isNegative ? '-' : '+'}${offsetHours}:${pad(offsetMinutes)}`;
+              const lDate = new Date(Date.UTC(date.year, date.month - 1, date.day, h, m) + offsetTotalMinutes * 60 * 1000 * (isNegative ? -1 : 1));
+              state.localTime = `${pad(lDate.getUTCDate())}/${pad(lDate.getUTCMonth() + 1)}/${lDate.getUTCFullYear()} ${pad(lDate.getUTCHours())}:${pad(lDate.getUTCMinutes())}`;
+            } else {
+              state.localTimeOffset = null;
+              state.localTime = state.utcTime;
+            }
+          }
+        }
       }
     } else if (groupTypeVal === 20) {
       const newFlag = !!((g2 >> 4) & 0x01);
@@ -1865,18 +2319,26 @@ const App: React.FC = () => {
         state.ptynBuffer.fill(' '); // Force reset of PTYN value specifically when flag changes
       }
       const address = g2 & 0x01; 
-      state.ptynBuffer[address * 4] = String.fromCharCode((g3 >> 8) & 0xFF);
-      state.ptynBuffer[address * 4 + 1] = String.fromCharCode(g3 & 0xFF);
-      state.ptynBuffer[address * 4 + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
-      state.ptynBuffer[address * 4 + 3] = String.fromCharCode(g4 & 0xFF);
+      if (!isNaN(g3)) {
+        state.ptynBuffer[address * 4] = String.fromCharCode((g3 >> 8) & 0xFF);
+        state.ptynBuffer[address * 4 + 1] = String.fromCharCode(g3 & 0xFF);
+      }
+      if (!isNaN(g4)) {
+        state.ptynBuffer[address * 4 + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+        state.ptynBuffer[address * 4 + 3] = String.fromCharCode(g4 & 0xFF);
+      }
     } else if (groupTypeVal === 30) {
       const address = g2 & 0x0F; 
       const idx = address * 4;
       if (idx < 32) {
-        state.lpsBuffer[idx] = String.fromCharCode((g3 >> 8) & 0xFF);
-        state.lpsBuffer[idx+1] = String.fromCharCode(g3 & 0xFF);
-        state.lpsBuffer[idx+2] = String.fromCharCode((g4 >> 8) & 0xFF);
-        state.lpsBuffer[idx+3] = String.fromCharCode(g4 & 0xFF);
+        if (!isNaN(g3)) {
+          state.lpsBuffer[idx] = String.fromCharCode((g3 >> 8) & 0xFF);
+          state.lpsBuffer[idx+1] = String.fromCharCode(g3 & 0xFF);
+        }
+        if (!isNaN(g4)) {
+          state.lpsBuffer[idx+2] = String.fromCharCode((g4 >> 8) & 0xFF);
+          state.lpsBuffer[idx+3] = String.fromCharCode(g4 & 0xFF);
+        }
       }
     }
   }, [fetchBandscanMetadata]); 
@@ -1959,6 +2421,7 @@ const App: React.FC = () => {
           lic: state.lic, 
           pin: state.pin, 
           localTime: state.localTime, 
+          localTimeOffset: state.localTimeOffset,
           utcTime: state.utcTime, 
           textAbFlag: state.abFlag, 
           rtPlus: (Array.from(state.rtPlusTags.values()) as RtPlusTag[]).sort((a, b) => a.contentType - b.contentType), 
@@ -1972,6 +2435,8 @@ const App: React.FC = () => {
           hasTmc: state.hasTmc, 
           hasTdc: state.hasTdc,
           hasIh: state.hasIh,
+          hasRp: state.hasRp,
+          hasErt: state.hasErt,
           hasEws: state.hasEws,
           ewsId: state.ewsId,
           eonData: eonData, 
@@ -1979,6 +2444,9 @@ const App: React.FC = () => {
           tmcMessages: [...state.tmcBuffer],
           tdcHistory: [...state.tdcHistoryBuffer],
           ihHistory: [...state.ihHistoryBuffer],
+          rpHistory: [...state.rpHistoryBuffer],
+          ertHistory: [...state.ertHistoryBuffer],
+          ertPlusTags: (Array.from(state.ertPlusTags.values()) as RtPlusTag[]).sort((a, b) => a.contentType - b.contentType),
           ps: currentPs, 
           longPs: renderRdsBuffer(state.lpsBuffer), 
           rtA: renderRdsBuffer(state.rtBuffer0), 
@@ -1998,6 +2466,11 @@ const App: React.FC = () => {
           rtHistory: [...state.rtHistoryBuffer],
           isRecording: state.isRecording,
           bandscanEntries: [...state.bandscanEntries],
+          isRawRecording: state.isRawRecording,
+          rawRecordingBuffer: [...state.rawRecordingBuffer],
+          isPlayingRaw: state.isPlayingRaw,
+          rawPlaybackCurrent: state.rawPlaybackCurrent,
+          rawPlaybackTotal: state.rawPlaybackTotal,
           currentMetadata: lastApiDataRef.current ? {
             freq: lastApiDataRef.current.freq,
             signal: lastApiDataRef.current.sig,
@@ -2232,6 +2705,211 @@ const App: React.FC = () => {
     decoderState.current.isDirty = true;
   };
 
+  const setRawRecording = (val: boolean) => {
+    if (!val && decoderState.current.isRawRecording) {
+        // Download file logic
+        const pi = decoderState.current.currentPi;
+        const now = new Date();
+        const dateStr = `${now.getDate().toString().padStart(2, '0')}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getFullYear()}`;
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
+        const filename = `RDSExpert Raw Data - ${pi} - ${dateStr} (${timeStr}).rdse`;
+        
+        const content = decoderState.current.rawRecordingBuffer.join('\n');
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    decoderState.current.isRawRecording = val;
+    if (val) {
+        decoderState.current.rawRecordingBuffer = [];
+    }
+    decoderState.current.isDirty = true;
+  };
+
+  const seekRawPlayback = (percent: number) => {
+    const state = decoderState.current;
+    if (!state.isPlayingRaw || rawPlaybackLinesRef.current.length === 0) return;
+    
+    const newIndex = Math.floor(percent * rawPlaybackLinesRef.current.length);
+    state.rawPlaybackCurrent = Math.min(newIndex, rawPlaybackLinesRef.current.length - 1);
+    
+    // Reset decoding state (copy from resetData logic but keep playback active)
+    state.currentPi = "----";
+    state.piCandidate = "----";
+    state.piCounter = 0;
+    state.piEstablishmentTime = 0;
+    state.psHistoryLogged = false;
+    state.psBuffer.fill(' ');
+    state.psMask.fill(false);
+    state.lpsBuffer.fill(' ');
+    state.ptynBuffer.fill(' ');
+    state.rtBuffer0.fill(' ');
+    state.rtBuffer1.fill(' ');
+    state.rtMask0.fill(false);
+    state.rtMask1.fill(false);
+    state.rtCandidateString = "";
+    state.rtStableSince = 0;
+    state.afSet = [];
+    state.afListHead = null;
+    state.afBMap.clear();
+    state.currentMethodBGroup = null;
+    state.eonMap.clear();
+    state.tmcBuffer = [];
+    state.tmcProviderBuffer.fill(' ');
+    state.rtPlusTags.clear();
+    state.tdcHistoryBuffer = [];
+    state.ihHistoryBuffer = [];
+    state.tdcBuffer5A = "";
+    state.tdcBuffer5B = "";
+    state.rtPlusItemRunning = false;
+    state.rtPlusItemToggle = false;
+    state.hasOda = false;
+    state.odaApp = undefined;
+    state.odaList = [];
+    state.hasRtPlus = false;
+    state.hasEon = false;
+    state.hasTmc = false;
+    state.hasTdc = false;
+    state.hasIh = false;
+    state.tdcSeenDuringGrace = false;
+    state.ihSeenDuringGrace = false;
+    state.hasEws = false;
+    state.ewsId = "";
+    state.ecc = "";
+    state.lic = "";
+    state.pin = "";
+    state.localTime = "";
+    state.localTimeOffset = null;
+    state.utcTime = "";
+    state.pty = 0;
+    state.ptynAbFlag = false;
+    state.tp = false;
+    state.ta = false;
+    state.ms = false; 
+    state.diStereo = false; 
+    state.diArtificialHead = false;
+    state.diCompressed = false;
+    state.diDynamicPty = false;
+    state.abFlag = false;
+    state.rtPlusOdaGroup = null;
+    state.lastGroup0A3 = null;
+    state.afType = 'Unknown';
+    state.tmcServiceInfo = { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Identifying...]" };
+    state.groupCounts = {};
+    state.groupTotal = 0;
+    state.groupSequence = [];
+    state.psHistoryBuffer = [];
+    state.rtHistoryBuffer = [];
+    state.psCandidateString = "        ";
+    state.psStableSince = 0;
+    state.psValidationBuffer = "        ";
+    state.ptynCandidateString = "        ";
+    state.ptynStableSince = 0;
+    state.ptynValidationBuffer = "        ";
+    berHistoryRef.current = [];
+    state.graceCounter = GRACE_PERIOD_PACKETS;
+    state.rawGroupBuffer = [];
+    state.frequencyStartTime = Date.now();
+    state.dabTargetGroup = null;
+    state.dabExtraInfo = "";
+    state.lfMfFollows = false;
+    
+    state.isDirty = true;
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const stopRawPlayback = () => {
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+    decoderState.current.isPlayingRaw = false;
+    decoderState.current.rawPlaybackCurrent = 0;
+    decoderState.current.rawPlaybackTotal = 0;
+    rawPlaybackLinesRef.current = [];
+    decoderState.current.isDirty = true;
+  };
+
+  const playRawFile = async (file: File) => {
+    if (status === ConnectionStatus.CONNECTED || status === ConnectionStatus.CONNECTING) {
+      disconnect();
+    }
+    
+    stopRawPlayback();
+    
+    const text = await file.text();
+    const lines = text.split('\n')
+      .map(l => l.trim())
+      .map(l => {
+        const match = l.match(/^([0-9A-F-]{4})\s+([0-9A-F-]{4})\s+([0-9A-F-]{4})\s+([0-9A-F-]{4})/i);
+        return match ? [match[1], match[2], match[3], match[4]] : null;
+      })
+      .filter(l => l !== null) as string[][];
+    
+    if (lines.length === 0) return;
+    
+    rawPlaybackLinesRef.current = lines;
+    resetData();
+    
+    decoderState.current.isPlayingRaw = true;
+    decoderState.current.rawPlaybackTotal = lines.length;
+    decoderState.current.rawPlaybackCurrent = 0;
+    decoderState.current.isDirty = true;
+    
+    playbackIntervalRef.current = setInterval(() => {
+      const state = decoderState.current;
+      if (state.rawPlaybackCurrent >= lines.length) {
+        stopRawPlayback();
+        return;
+      }
+      
+      const parts = lines[state.rawPlaybackCurrent];
+      const hasError = parts.some(p => p.includes('-'));
+      
+      if (hasError) {
+        if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+          updateBer(true);
+        }
+        state.groupTotal++;
+        state.groupCounts["--"] = (state.groupCounts["--"] || 0) + 1;
+        if (analyzerActiveRef.current) {
+          state.groupSequence.push("--");
+        }
+      } else {
+        const g1 = parseInt(parts[0], 16);
+        const g2 = parseInt(parts[1], 16);
+        const g3 = parseInt(parts[2], 16);
+        const g4 = parseInt(parts[3], 16);
+        
+        decodeRdsGroup(g1, g2, g3, g4);
+        if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+          updateBer(false);
+        }
+      }
+      
+      state.rawPlaybackCurrent++;
+      state.isDirty = true;
+    }, 88);
+  };
+
+  const handlePlayRawClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      playRawFile(file);
+    }
+    e.target.value = '';
+  };
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-300 font-sans selection:bg-blue-500/30">
 
@@ -2246,27 +2924,42 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex flex-row gap-2 w-full md:w-auto items-stretch">
-                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-1 md:order-2">
+                <a 
+                  href="https://github.com/LucasGallone/RDSExpert/wiki" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors order-4 md:order-1 flex-none"
+                  title="Documentation on GitHub (Opens in a new tab)"
+                >
+                  <i className="fa-solid fa-circle-info text-sm md:text-base"></i>
+                </a>
+
+                <button 
+                  onClick={handlePlayRawClick}
+                  className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center gap-2 text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors order-3 md:order-2 flex-none text-[10px] md:text-xs font-bold uppercase"
+                >
+                  <i className="fa-solid fa-play"></i>
+                  <span>RAW DATA</span>
+                </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  accept=".rdse,.txt,.spy,.smp,.log,.rds,.rawrds" 
+                  className="hidden" 
+                />
+
+                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-1 md:order-3">
                   <span>STATUS</span> 
                   <span className={`font-bold ${status === ConnectionStatus.CONNECTED ? 'text-green-400' : status === ConnectionStatus.ERROR ? 'text-red-400' : 'text-slate-400'}`}>
                     {status}
                   </span>
                 </div>
                 
-                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-2 md:order-3">
+                <div className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center gap-2 md:gap-3 flex-1 md:flex-none shrink-0 text-[10px] md:text-xs font-mono text-slate-500 order-2 md:order-4">
                   <span>PACKETS</span> 
                   <span className="text-slate-200">{packetCount.toLocaleString()}</span>
                 </div>
-
-                <a 
-                  href="https://github.com/LucasGallone/RDSExpert/wiki" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors order-3 md:order-1 flex-none"
-                  title="Documentation on GitHub (Opens in a new tab)"
-                >
-                  <i className="fa-solid fa-circle-info text-sm md:text-base"></i>
-                </a>
             </div>
             
             <div className="flex items-center gap-2 flex-1">
@@ -2301,11 +2994,42 @@ const App: React.FC = () => {
         </div>
         
         <div className="space-y-6">
+           {rdsData.isPlayingRaw && (
+             <div 
+               className="w-full bg-green-950/20 h-8 rounded-lg flex items-center px-4 border border-green-900/30 overflow-hidden relative cursor-pointer group/progress"
+               onClick={(e) => {
+                 const rect = e.currentTarget.getBoundingClientRect();
+                 const x = e.clientX - rect.left;
+                 const percent = x / rect.width;
+                 seekRawPlayback(percent);
+               }}
+             >
+               <div 
+                 className="absolute inset-y-0 left-0 bg-green-900/40 transition-all duration-100" 
+                 style={{ width: `${(rdsData.rawPlaybackCurrent / rdsData.rawPlaybackTotal) * 100}%` }}
+               ></div>
+               <div className="relative z-10 w-full flex justify-end items-center gap-3">
+                 <span className="text-xs font-mono text-green-500 font-bold">
+                   {rdsData.rawPlaybackCurrent}/{rdsData.rawPlaybackTotal}
+                 </span>
+                 <button 
+                   onClick={(e) => { e.stopPropagation(); stopRawPlayback(); }}
+                   className="w-5 h-5 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-full transition-colors shadow-lg"
+                   title="Stop playback"
+                 >
+                   <i className="fa-solid fa-stop text-[10px]"></i>
+                 </button>
+               </div>
+             </div>
+           )}
            <LcdDisplay 
              data={rdsData} 
              onReset={resetData} 
              onTdcClick={() => setShowTdcHistory(true)}
              onIhClick={() => setShowIhHistory(true)}
+             onRpClick={() => setShowRpHistory(true)}
+             onErtClick={() => setShowErtHistory(true)}
+             onSetRawRecording={setRawRecording}
            />
            <HistoryControls data={rdsData} onSetRecording={setRecording} serverUrl={serverUrl} />
            <InfoGrid data={rdsData} />
@@ -2342,14 +3066,15 @@ const App: React.FC = () => {
 
       {showTdcHistory && (
         <HistoryViewer 
-          title="TDC HISTORY (TRANSPARENT DATA CHANNEL) [5A / 5B]"
+          title="TDC HISTORY (TRANSPARENT DATA CHANNELS) [5A / 5B]"
           onClose={() => setShowTdcHistory(false)}
           data={rdsData.tdcHistory}
-          getCopyText={(item) => `[${item.time}] [${item.group}] ${item.text}`}
+          getCopyText={(item) => `[${item.time}] [GROUP: ${item.group}] [CHANNEL: ${item.channel}] ${item.text}`}
           renderHeader={() => (
             <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
               <th className="p-3 w-24">Time</th>
               <th className="p-3 w-24">Group</th>
+              <th className="p-3 w-24">Channel</th>
               <th className="p-3">Text</th>
             </tr>
           )}
@@ -2357,6 +3082,7 @@ const App: React.FC = () => {
             <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
               <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
               <td className="p-3 text-blue-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-blue-400 border-r border-slate-800/50 align-top font-mono font-bold">{item.channel}</td>
               <td className="p-3 text-white whitespace-pre-wrap leading-relaxed">
                 {item.text.split('').map((char, idx) => {
                   const code = char.charCodeAt(0);
@@ -2383,11 +3109,12 @@ const App: React.FC = () => {
           title="IN HOUSE APPLICATIONS HISTORY [6A / 6B]"
           onClose={() => setShowIhHistory(false)}
           data={rdsData.ihHistory}
-          getCopyText={(item) => `[${item.time}] [${item.group}] ${item.text}`}
+          getCopyText={(item) => `[${item.time}] [GROUP: ${item.group}] [CHANNEL: ${item.channel}] ${item.text}`}
           renderHeader={() => (
             <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
               <th className="p-3 w-24">Time</th>
               <th className="p-3 w-24">Group</th>
+              <th className="p-3 w-24">Channel</th>
               <th className="p-3">Decoded Data</th>
             </tr>
           )}
@@ -2395,12 +3122,88 @@ const App: React.FC = () => {
             <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
               <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
               <td className="p-3 text-emerald-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-blue-400 border-r border-slate-800/50 align-top font-mono font-bold">{item.channel}</td>
               <td className="p-3 text-white font-mono text-sm leading-relaxed">
                 {item.text}
               </td>
             </tr>
           )}
           emptyMessage="No In House data detected on groups 6A or 6B."
+          copyReverse={true}
+        />
+      )}
+
+      {showRpHistory && (
+        <HistoryViewer 
+          title="RADIO PAGING HISTORY [7A]"
+          onClose={() => setShowRpHistory(false)}
+          data={rdsData.rpHistory}
+          getCopyText={(item) => `[${item.time}] [GROUP: ${item.group}] [TYPE: ${item.type || "Unknown"}] [FLAG: ${item.abFlag}] [INDICATOR: ${item.address.toString(2).padStart(4, '0')}] ${item.text}`}
+          renderHeader={() => (
+            <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+              <th className="p-3 w-24">Time</th>
+              <th className="p-3 w-24">Group</th>
+              <th className="p-3 w-24">Type</th>
+              <th className="p-3 w-24">Flag</th>
+              <th className="p-3 w-24">Indicator</th>
+              <th className="p-3">Decoded Data</th>
+            </tr>
+          )}
+          renderRow={(item, i) => (
+            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+              <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
+              <td className="p-3 text-emerald-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-purple-400 border-r border-slate-800/50 align-top font-bold">{item.type || "Unknown"}</td>
+              <td className="p-3 text-orange-400 border-r border-slate-800/50 align-top font-mono font-bold">{item.abFlag}</td>
+              <td className="p-3 text-blue-400 border-r border-slate-800/50 align-top font-mono font-bold">{item.address.toString(2).padStart(4, '0')}</td>
+              <td className="p-3 text-white font-mono text-sm leading-relaxed">
+                {item.text}
+              </td>
+            </tr>
+          )}
+          emptyMessage="No Radio Paging data detected on group 7A."
+          copyReverse={true}
+        />
+      )}
+
+      {showErtHistory && (
+        <HistoryViewer 
+          title="ENHANCED RADIOTEXT HISTORY"
+          onClose={() => setShowErtHistory(false)}
+          data={rdsData.ertHistory}
+          getCopyText={(item) => {
+            const tagsText = item.tags && item.tags.length > 0 
+              ? item.tags.map(tag => `\n  - ${tag.label} (ID ${tag.contentType}): ${tag.text}`).join('')
+              : '';
+            return `[${item.time}] [GROUP: ${item.group}] ${item.text}${tagsText}`;
+          }}
+          renderHeader={() => (
+            <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
+              <th className="p-3 w-24">Time</th>
+              <th className="p-3 w-24">Group</th>
+              <th className="p-3">Message</th>
+            </tr>
+          )}
+          renderRow={(item, i) => (
+            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+              <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
+              <td className="p-3 text-emerald-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
+              <td className="p-3 text-white leading-relaxed">
+                <div>{item.text}</div>
+                {item.tags && item.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.tags.map((tag, idx) => (
+                      <span key={idx} className="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-[10px] text-emerald-400">
+                        <span className="text-white mr-1">{tag.label} (ID {tag.contentType}):</span>
+                        {tag.text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </td>
+            </tr>
+          )}
+          emptyMessage="No Enhanced Radiotext (eRT) data decoded for now."
           copyReverse={true}
         />
       )}
