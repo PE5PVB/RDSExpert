@@ -9,7 +9,7 @@
 - Added Radio Paging decoding on group 7A. It can be accessed by clicking on the new "RP" indicator when data is detected. The decoder is capable of intelligently detecting the type of messages sent. It can distinguish between a numeric or alphanumeric message, for example.
 - Added Raw Data recording. This allows to record all RDS groups during decoding and export them in ASCII format. This recording can then be played back on RDSExpert or any other tool that supports playback of ASCII format recordings.
 - Added Raw Data playback. It allows to play recordings in ASCII format, in order to view RDS decoding as on a signal received in real time. Recordings from other tools (such as RDS Spy, for example) are supported.
-- Added Slow Labelling Codes (SLC) indicators to the Groups Monitor. This information is sent on group 1A and indicates, for example, the presence of an indicator of an Extended Country Code.
+- Added Slow Labelling Codes (SLC) indicators to the Groups Monitor. This information is sent on group 1A and indicates, for example, the presence of an Extended Country Code indicator.
 
 ### --- 28/02/2026 ---
 - Added a 3 seconds delay for the In House Applications and TDC detection, in order to prevent false identifications. The indicators could light up incorrectly if groups 5A/5B and 6A/6B were used for another purpose.
@@ -127,6 +127,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
