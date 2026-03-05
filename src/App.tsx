@@ -2302,7 +2302,7 @@ const App: React.FC = () => {
               const offsetTotalMinutes = offsetHalfHours * 30;
               const offsetHours = Math.floor(offsetTotalMinutes / 60);
               const offsetMinutes = offsetTotalMinutes % 60;
-              state.localTimeOffset = `Offset: ${isNegative ? '-' : '+'}${offsetHours}:${pad(offsetMinutes)}`;
+              state.localTimeOffset = `Time Offset: ${isNegative ? '-' : '+'}${offsetHours}:${pad(offsetMinutes)}`;
               const lDate = new Date(Date.UTC(date.year, date.month - 1, date.day, h, m) + offsetTotalMinutes * 60 * 1000 * (isNegative ? -1 : 1));
               state.localTime = `${pad(lDate.getUTCDate())}/${pad(lDate.getUTCMonth() + 1)}/${lDate.getUTCFullYear()} ${pad(lDate.getUTCHours())}:${pad(lDate.getUTCMinutes())}`;
             } else {
