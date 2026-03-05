@@ -8,7 +8,7 @@
 - Added Enhanced Radiotext decoding, with eRT+ tags. This advanced Radiotext feature, which is rarely used, allows, among other things, the display of non-Latin characters (such as Arabic or Greek). The decoding history is available by clicking on the new "eRT" indicator when such data is detected (requires sending the ODA indication dedicated to this use on group 3A).
 - Added Radio Paging decoding on group 7A. It can be accessed by clicking on the new "RP" indicator when data is detected. The decoder is capable of intelligently detecting the type of messages sent. It can distinguish between a numeric or alphanumeric message, for example.
 - Added Raw Data recording. This allows to record all RDS groups during decoding and export them in ASCII format. This recording can then be played back on RDSExpert or any other tool that supports playback of ASCII format recordings.
-- Added Raw Data playing. Allows playback of recordings in ASCII format. Recordings from other tools (such as RDS Spy, for example) are supported.
+- Added Raw Data playback. It allows to play recordings in ASCII format, in order to view RDS decoding as on a signal received in real time. Recordings from other tools (such as RDS Spy, for example) are supported.
 - Added Slow Labeling Codes (SLC) indicators to the Groups Monitor. This information is sent to group 1A and indicates, for example, the presence of an indicator of an Extended Country Code.
 
 ### --- 28/02/2026 ---
@@ -127,6 +127,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
