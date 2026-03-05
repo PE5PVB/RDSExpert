@@ -1,6 +1,6 @@
 export interface RdsData {
-  pi: string;          // Program Identification (e.g., F202)
-  ps: string;          // Program Service (e.g., SKYROCK)
+  pi: string;          // Program Identification (e.g., F204)
+  ps: string;          // Program Service (e.g., F I P)
   longPs: string;      // Long Program Service (Max 32 chars, via Group 15A/15B)
   rtA: string;         // Radio Text A (Text A/B Flag = 0)
   rtB: string;         // Radio Text B (Text A/B Flag = 1)
@@ -16,6 +16,8 @@ export interface RdsData {
   hasTmc: boolean;     // Flag d'activité TMC (Latched)
   hasTdc: boolean;     // Flag d'activité TDC (Latched)
   hasIh: boolean;      // Flag d'activité IH (Latched)
+  hasRp: boolean;      // Flag d'activité RP (Latched)
+  hasErt: boolean;     // Flag d'activité eRT (Latched)
   hasEws: boolean;     // Flag d'activité EWS (Latched)
   ewsId: string;       // EWS ID (Group 1A)
   pty: number;         // Program Type (0-31)
@@ -37,12 +39,16 @@ export interface RdsData {
   lic: string;         // Language Identification Code (Group 1A)
   pin: string;         // Program Item Number (Day HH:MM, via Group 1A)
   localTime: string;   // Local Clock Time (Group 4A)
+  localTimeOffset: string | null; // Local Time Offset (Group 4A)
   utcTime: string;     // UTC Clock Time (Group 4A)
   eonData: Record<string, EonNetwork>; // EON Data keyed by PI
   tmcServiceInfo: TmcServiceInfo; // Service Provider Info (SID, LTN, etc.)
   tmcMessages: TmcMessage[]; // Buffer of decoded TMC messages
   tdcHistory: TdcHistoryItem[]; // Buffer of decoded TDC messages
   ihHistory: IhHistoryItem[];  // Buffer of decoded IH messages
+  rpHistory: RpHistoryItem[];  // Buffer of decoded RP messages
+  ertHistory: ErtHistoryItem[]; // Buffer of decoded eRT messages
+  ertPlusTags: RtPlusTag[];    // eRT+ Tags
   ber: number;         // Bit Error Rate (Signal quality indicator)
   rssi: number;        // Signal Strength
   snr: number;         // Signal to Noise Ratio
@@ -64,6 +70,15 @@ export interface RdsData {
   isRecording: boolean;
   bandscanEntries: BandscanEntry[];
   currentMetadata?: BandscanEntry;
+
+  // Raw Recording
+  isRawRecording: boolean;
+  rawRecordingBuffer: string[];
+
+  // Raw Playback
+  isPlayingRaw: boolean;
+  rawPlaybackCurrent: number;
+  rawPlaybackTotal: number;
 }
 
 export interface BandscanEntry {
@@ -109,12 +124,31 @@ export interface TdcHistoryItem {
     time: string;
     text: string;
     group: '5A' | '5B';
+    channel: number;
 }
 
 export interface IhHistoryItem {
     time: string;
     text: string;
     group: '6A' | '6B';
+    channel: number;
+}
+
+export interface RpHistoryItem {
+    time: string;
+    text: string;
+    group: '7A';
+    address: number;
+    abFlag: number;
+    type?: 'Numeric' | 'Alphanumeric' | 'Unknown';
+    pagerId?: string;
+}
+
+export interface ErtHistoryItem {
+    time: string;
+    text: string;
+    group: string;
+    tags?: RtPlusTag[];
 }
 
 export interface RawGroup {
@@ -135,6 +169,7 @@ export interface EonNetwork {
   af: string[];
   mappedFreqs: string[]; // Format "FreqA -> FreqB"
   lastUpdate: number;
+  pendingLfmf?: boolean;
 }
 
 export interface RtPlusTag {
