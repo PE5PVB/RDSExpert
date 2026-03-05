@@ -252,6 +252,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
 
   // ODA Detection State
   const [odaLogs, setOdaLogs] = useState<string[]>([]);
+  const [slcLogs, setSlcLogs] = useState<string[]>([]);
   const dabTargetGroupRef = useRef<string | null>(null);
   const dabInfoRef = useRef<string>("");
 
@@ -362,6 +363,48 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                   }
               }
           });
+
+          // SLC Detection for Group 1A
+          data.recentGroups.forEach(grp => {
+              if (grp.type === '1A') {
+                  const block3 = grp.blocks[2];
+                  if (!isNaN(block3)) {
+                      const variant = (block3 >> 12) & 0x7;
+                      const services: string[] = [];
+                      
+                      if (variant === 0) {
+                          if (((block3 >> 8) & 0xF) > 0) services.push("Paging");
+                          if ((block3 & 0xFF) > 0) services.push("Extended Country Code");
+                      } else if (variant === 1) {
+                          services.push("TMC identification");
+                      } else if (variant === 2) {
+                          services.push("Paging identification");
+                      } else if (variant === 3) {
+                          services.push("Language Identification Code");
+                      } else if (variant === 4 || variant === 5) {
+                          services.push("Unassigned SLC");
+                      } else if (variant === 6) {
+                          services.push("Specific application developed by the broadcaster");
+                      } else if (variant === 7) {
+                          services.push("EWS channel identification");
+                      }
+                      
+                      if (services.length > 0) {
+                          setSlcLogs(prev => {
+                              let next = [...prev];
+                              let changed = false;
+                              services.forEach(s => {
+                                  if (!next.includes(s)) {
+                                      next.push(s);
+                                      changed = true;
+                                  }
+                              });
+                              return changed ? next : prev;
+                          });
+                      }
+                  }
+              }
+          });
       }
   }, [data.recentGroups, isPaused]);
 
@@ -377,7 +420,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                 let changed = false;
 
                 data.recentGroups.forEach(grp => {
-                    const packetHex = grp.blocks.map(b => b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
+                    const packetHex = grp.blocks.map(b => isNaN(b) ? '----' : b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
                     // Format: Time PacketHex
                     const line = `${grp.time}   ${packetHex}`;
 
@@ -404,7 +447,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                 data.recentGroups.forEach(grp => {
                     if (grp.type === detailGroup) {
                         const [g1, g2, g3, g4] = grp.blocks;
-                        const hex = grp.blocks.map(b => b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
+                        const hex = grp.blocks.map(b => isNaN(b) ? '----' : b.toString(16).toUpperCase().padStart(4, '0')).join(' ');
                         
                         // Detailed Breakdown
                         const type = (g2 >> 12) & 0xF;
@@ -438,7 +481,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                         const char4L = (b4L >= 0x20 && b4L <= 0x9F) ? decodeRdsByte(b4L) : '.';
 
                         // Layout: TIME (8 chars) | HEX (19 chars) | NEW FORMAT
-                        const line = `${grp.time}      ${hex}   ${groupTypeStr.padEnd(3, ' ')} ${tpStr} ${ptyBin} ${b2RestBin}  ${b3HighBin} ${b3LowBin}  ${b4HighBin} ${b4LowBin}  ${dec3H} ${dec3L} ${dec4H} ${dec4L}  '${char3H}${char3L}' '${char4H}${char4L}'`;
+                        const line = `${grp.time}      ${hex}\u0003${groupTypeStr.padEnd(3, ' ')} ${tpStr}\u0001${ptyBin} ${b2RestBin}  ${b3HighBin} ${b3LowBin}  ${b4HighBin} ${b4LowBin}\u0002${dec3H} ${dec3L} ${dec4H} ${dec4L}\u0002'${char3H}${char3L}' '${char4H}${char4L}'`;
                         
                         // Append to bottom, keep last 100 lines
                         const newItem: LogItem = { id: logIdCounter.current++, text: line };
@@ -488,6 +531,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
   useEffect(() => {
       if (data.groupTotal === 0) {
           setOdaLogs([]);
+          setSlcLogs([]);
           setHexLogs({ 0: [], 1: [], 2: [], 3: [] });
           setDetailLogs([]);
           setIsPaused(false);
@@ -500,6 +544,7 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
   // Explicitly reset ODA logs when PI changes (station change)
   useEffect(() => {
       setOdaLogs([]);
+      setSlcLogs([]);
       dabTargetGroupRef.current = null;
       dabInfoRef.current = "";
   }, [data.pi]);
@@ -565,11 +610,16 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
 
       {active && (
         <>
-            {/* ODA Detection Display */}
-            {odaLogs.length > 0 && (
+            {/* ODA & SLC Detection Display */}
+            {(odaLogs.length > 0 || slcLogs.length > 0) && (
                 <div className="bg-slate-950 border-b border-slate-800 p-2">
+                    {slcLogs.length > 0 && (
+                        <div className="text-[11px] font-mono text-yellow-500 border-l-2 border-yellow-500/50 pl-2 mb-0.5 last:mb-0">
+                            {slcLogs.length === 1 ? "Slow Labelling Code found on Group 1A" : "Slow Labelling Codes found on Group 1A"}: {slcLogs.join(" + ")}
+                        </div>
+                    )}
                     {odaLogs.map((log, index) => (
-                        <div key={index} className="text-[11px] font-mono text-green-400 border-l-2 border-green-500/50 pl-2 mb-0.5 last:mb-0">
+                        <div key={`oda-${index}`} className="text-[11px] font-mono text-green-400 border-l-2 border-green-500/50 pl-2 mb-0.5 last:mb-0">
                             {log}
                         </div>
                     ))}
@@ -614,7 +664,12 @@ export const GroupAnalyzer: React.FC<GroupAnalyzerProps> = ({ data, active, onTo
                          {detailLogs.map((item) => (
                              <div key={item.id} className="text-green-400 whitespace-pre hover:bg-slate-900/50">
                                  <span className="hidden md:inline">{item.text.substring(0, 14)}</span>
-                                 {item.text.substring(14)}
+                                 {item.text.substring(14).split(/(\u0001|\u0002|\u0003)/).map((part, i) => {
+                                     if (part === '\u0003') return <React.Fragment key={i}><span className="hidden md:inline">{"      "}</span><span className="md:hidden">{"   "}</span></React.Fragment>;
+                                     if (part === '\u0001') return <React.Fragment key={i}><span className="hidden md:inline">{"      "}</span><span className="md:hidden">{" "}</span></React.Fragment>;
+                                     if (part === '\u0002') return <React.Fragment key={i}><span className="hidden md:inline">{"      "}</span><span className="md:hidden">{"  "}</span></React.Fragment>;
+                                     return <React.Fragment key={i}>{part}</React.Fragment>;
+                                 })}
                              </div>
                          ))}
                          {detailLogs.length === 0 && (
