@@ -4,7 +4,7 @@
 - Added a tooltip displaying the time difference (Time Offset) on the "Local CT" field, relative to UTC time.
 - Added channels display in the IH (In House Applications) history, from 0 to 31.
 - Added channels display in the TDC (Transparent Data Channels) history, from 0 to 31.
-- Added display of "non-standard" PIN data. Some stations incorrectly send PIN data with a day value of 0. Until now, the PIN data was not decoded in such situation.
+- Added display of "non-standard" PIN data. Some stations incorrectly send PIN data with "0" as day value. Until now, the PIN data was not decoded in such situation.
 - Added Enhanced Radiotext decoding, with eRT+ tags. This advanced Radiotext feature, which is rarely used, allows, among other things, the display of non-Latin characters (such as Arabic or Greek). The decoding history is available by clicking on the new "eRT" indicator when such data is detected (requires sending the ODA indication dedicated to this use on group 3A).
 - Added Radio Paging decoding on group 7A. It can be accessed by clicking on the new "RP" indicator when data is detected. The decoder is capable of intelligently detecting the type of messages sent. It can distinguish between a numeric or alphanumeric message, for example.
 - Added Raw Data recording. This allows to record all RDS groups during decoding and export them in ASCII format. This recording can then be played back on RDSExpert or any other tool that supports playback of ASCII format recordings.
@@ -127,6 +127,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
