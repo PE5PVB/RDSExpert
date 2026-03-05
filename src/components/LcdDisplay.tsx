@@ -8,11 +8,14 @@ interface LcdDisplayProps {
   onReset: () => void;
   onTdcClick?: () => void;
   onIhClick?: () => void;
+  onRpClick?: () => void;
+  onErtClick?: () => void;
+  onSetRawRecording: (val: boolean) => void;
 }
 
 type UnderscoreMode = 'OFF' | 'RT_PROGRESSIVE' | 'ALL' | 'PS_ONLY' | 'RT_ONLY';
 
-export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClick, onIhClick }) => {
+export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClick, onIhClick, onRpClick, onErtClick, onSetRawRecording }) => {
   const [underscoreMode, setUnderscoreMode] = useState<UnderscoreMode>(() => (localStorage.getItem('rds_underscore_mode') as UnderscoreMode) || 'OFF');
   
   useEffect(() => {
@@ -33,6 +36,9 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
 
   // State for PTYN Flag Tooltip
   const [showPtynTooltip, setShowPtynTooltip] = useState(false);
+
+  // State for CT Offset Tooltip
+  const [showCtTooltip, setShowCtTooltip] = useState(false);
 
   // State for RT A/B Tooltips
   const [showRtATooltip, setShowRtATooltip] = useState(false);
@@ -321,6 +327,13 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
       {/* Controls */}
       <div className="absolute top-2 right-2 z-20 flex gap-2">
           <button 
+            onClick={() => onSetRawRecording(!data.isRawRecording)}
+            className={`px-2 py-1 text-[10px] font-bold border rounded uppercase transition-all min-w-[120px] flex items-center justify-center gap-2 ${data.isRawRecording ? 'bg-red-950/60 text-red-400 border-red-500/80 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]' : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:bg-slate-800/60 hover:text-slate-300 hover:border-slate-700'}`}
+          >
+            <div className={`w-2 h-2 rounded-full transition-colors ${data.isRawRecording ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-slate-600'}`}></div>
+            RECORD RAW DATA
+          </button>
+          <button 
             onClick={onReset}
             className="px-2 py-1 text-[10px] font-bold border rounded uppercase transition-colors min-w-[80px] flex items-center justify-center gap-2 bg-orange-900/20 text-orange-400 border-orange-500/50 hover:bg-orange-500/40"
           >
@@ -456,6 +469,8 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
             <div className="md:hidden flex gap-2">
                 <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
                 <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
+                <FlagBadge active={data.hasRp} label="RP" color="orange" onClick={onRpClick} />
+                <FlagBadge active={data.hasErt} label="eRT" color="green" onClick={onErtClick} />
             </div>
         </div>
 
@@ -508,10 +523,12 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
              </div>
         </div>
 
-        {/* TDC & IH Indicators - Visible on PC only here */}
+        {/* TDC, IH & RP Indicators - Visible on PC only here */}
         <div className="shrink-0 hidden md:flex items-center justify-center gap-2 bg-slate-900/40 rounded p-2 border border-slate-800/50">
             <FlagBadge active={data.hasIh} label="IH" color="emerald" onClick={onIhClick} />
             <FlagBadge active={data.hasTdc} label="TDC" color="blue" onClick={onTdcClick} />
+            <FlagBadge active={data.hasRp} label="RP" color="orange" onClick={onRpClick} />
+            <FlagBadge active={data.hasErt} label="eRT" color="green" onClick={onErtClick} />
         </div>
         
         {/* ECC Box with Tooltip */}
@@ -555,9 +572,19 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
         {/* Local & UTC CT Wrapper for mobile row alignment */}
         <div className="flex flex-row gap-4 flex-1 items-stretch md:contents">
           {/* Local CT */}
-          <div className="flex-1 flex items-center space-x-2 bg-slate-900/40 rounded p-2 border border-slate-800/50 justify-center">
+          <div 
+            className="flex-1 flex items-center space-x-2 bg-slate-900/40 rounded p-2 border border-slate-800/50 justify-center relative cursor-default group/ct"
+            onMouseEnter={() => setShowCtTooltip(true)}
+            onMouseLeave={() => setShowCtTooltip(false)}
+          >
               <span className="text-[10px] font-bold text-slate-500 uppercase mr-2">Local CT</span>
               <span className={`font-mono text-lg tracking-wide ${data.localTime ? 'text-white' : 'text-slate-600'}`}>{data.localTime || "--/--/-- --:--"}</span>
+              {showCtTooltip && data.localTime && data.localTimeOffset && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-4 py-2 bg-slate-800 text-white text-sm font-mono rounded border border-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.5)] z-50 animate-in fade-in zoom-in-95 duration-200 whitespace-nowrap">
+                   {data.localTimeOffset}
+                   <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-600"></div>
+                </div>
+              )}
           </div>
           
           {/* UTC CT */}
@@ -599,7 +626,7 @@ export const LcdDisplay: React.FC<LcdDisplayProps> = ({ data, onReset, onTdcClic
   );
 };
 
-const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple' | 'blue' | 'emerald'; tooltip?: string; onClick?: () => void }> = ({ active, label, alert, color, tooltip, onClick }) => {
+const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; color?: 'green' | 'yellow' | 'purple' | 'blue' | 'emerald' | 'orange'; tooltip?: string; onClick?: () => void }> = ({ active, label, alert, color, tooltip, onClick }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -633,6 +660,8 @@ const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; col
       activeClass = "text-blue-400 bg-blue-900/20 border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.6)] cursor-pointer hover:bg-blue-500/30";
   } else if (color === 'emerald') {
       activeClass = "text-emerald-400 bg-emerald-900/20 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.6)] cursor-pointer hover:bg-emerald-500/30";
+  } else if (color === 'orange') {
+      activeClass = "text-orange-400 bg-orange-900/20 border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.6)] cursor-pointer hover:bg-orange-500/30";
   }
   
   const inactiveClass = "text-slate-700 bg-slate-900/50 border-slate-800 opacity-50";
@@ -641,7 +670,7 @@ const FlagBadge: React.FC<{ active: boolean; label: string; alert?: boolean; col
     <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         <span 
           onClick={active ? onClick : undefined}
-          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300 cursor-default`}
+          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${active ? activeClass : inactiveClass} transition-all duration-300 ${active && onClick ? 'cursor-pointer' : 'cursor-default'}`}
         >
           {label}
         </span>
