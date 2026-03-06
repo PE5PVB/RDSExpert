@@ -1,5 +1,12 @@
 # RDSExpert Changelog
 
+### --- 06/03/2026 ---
+- Fixed a bug that caused certain letters with accents to be displayed incorrectly in the Enhanced Radiotext history.
+- Fixed a bug that caused letters with accents to be displayed incorrectly when decoding was in progress on the Long PS.
+- Fixed a bug that stopped Raw Data recordings from playing when clicking the "Reset Data" button instead of resetting the RDS display.
+- Fixed a display bug affecting non-Latin characters in the Enhanced Radiotext history.
+- Improved clarity of the "Raw Data" progress bar when playing back a recording for better visibility.
+
 ### --- 05/03/2026 ---
 - Added a tooltip displaying the time difference (Time Offset) on the "Local CT" field, relative to UTC time.
 - Added channels display in the IH (In House Applications) history, from 0 to 31.
@@ -127,6 +134,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
