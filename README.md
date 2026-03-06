@@ -29,6 +29,7 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 ## Data that can be decoded
 • General features for the station identification: <b>PI code</b>, <b>PS</b>, <b>TP/TA flags</b> (Traffic Program - Traffic Announcement) and <b>Music/Speech switch</b>.
 <br>
+<br>
 • <b>Radiotext messages on Lines A and B</b>, with recognition of the maximal number of characters (64 if sent on 2A, 32 is sent on 2B).
 <br>
 <br>
