@@ -417,7 +417,7 @@ const decodeRdsByte = (b: number): string => {
 };
 
 // --- Hybrid Decoder Function ---
-const renderRdsBuffer = (chars: string[]): string => {
+const renderRdsBuffer = (chars: string[], isErtOrLps: boolean = false): string => {
   const bytes = new Uint8Array(
     chars.map((c) => (c ? c.charCodeAt(0) : 0x20))
   );
@@ -425,6 +425,12 @@ const renderRdsBuffer = (chars: string[]): string => {
   const hasHighBits = bytes.some((b) => b > 127);
   
   if (hasHighBits) {
+    if (isErtOrLps) {
+      // For eRT and Long PS, we strictly use UTF-8 if high bits are present.
+      // This avoids showing incorrect RDS G2 characters (like 'ń' for 0xB6) during progressive decoding.
+      const looseDecoder = new TextDecoder("utf-8", { fatal: false });
+      return looseDecoder.decode(bytes).replace(/\uFFFD/g, ' ').replace(/\0/g, ' ');
+    }
     try {
       const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
       const decoded = utf8Decoder.decode(bytes);
@@ -433,8 +439,19 @@ const renderRdsBuffer = (chars: string[]): string => {
       // UTF-8 failed. Check if it looks like a valid but incomplete UTF-8 sequence.
       // We look for at least one valid multi-byte character to confirm it's UTF-8.
       let hasValidUtf8 = false;
-      for (let i = 0; i < bytes.length - 1; i++) {
-        if (bytes[i] >= 0xC2 && bytes[i] <= 0xDF && bytes[i+1] >= 0x80 && bytes[i+1] <= 0xBF) {
+      for (let i = 0; i < bytes.length; i++) {
+        // 2-byte sequence: C2-DF followed by 80-BF
+        if (i < bytes.length - 1 && bytes[i] >= 0xC2 && bytes[i] <= 0xDF && bytes[i+1] >= 0x80 && bytes[i+1] <= 0xBF) {
+          hasValidUtf8 = true;
+          break;
+        }
+        // 3-byte sequence: E0-EF followed by two 80-BF
+        if (i < bytes.length - 2 && bytes[i] >= 0xE0 && bytes[i] <= 0xEF && bytes[i+1] >= 0x80 && bytes[i+1] <= 0xBF && bytes[i+2] >= 0x80 && bytes[i+2] <= 0xBF) {
+          hasValidUtf8 = true;
+          break;
+        }
+        // 4-byte sequence: F0-F4 followed by three 80-BF
+        if (i < bytes.length - 3 && bytes[i] >= 0xF0 && bytes[i] <= 0xF4 && bytes[i+1] >= 0x80 && bytes[i+1] <= 0xBF && bytes[i+2] >= 0x80 && bytes[i+2] <= 0xBF && bytes[i+3] >= 0x80 && bytes[i+3] <= 0xBF) {
           hasValidUtf8 = true;
           break;
         }
@@ -1081,17 +1098,21 @@ const App: React.FC = () => {
     decoderState.current.isDirty = true;
   }, []);
   
-  const resetData = useCallback(() => {
-    const state = decoderState.current;
-    
+  const stopRawPlayback = useCallback(() => {
     if (playbackIntervalRef.current) {
       clearInterval(playbackIntervalRef.current);
       playbackIntervalRef.current = null;
     }
-    state.isPlayingRaw = false;
-    state.rawPlaybackCurrent = 0;
-    state.rawPlaybackTotal = 0;
+    decoderState.current.isPlayingRaw = false;
+    decoderState.current.rawPlaybackCurrent = 0;
+    decoderState.current.rawPlaybackTotal = 0;
+    rawPlaybackLinesRef.current = [];
+    decoderState.current.isDirty = true;
+  }, []);
 
+  const resetData = useCallback(() => {
+    const state = decoderState.current;
+    
     state.currentPi = "----";
     state.piCandidate = "----";
     state.piCounter = 0;
@@ -2109,7 +2130,7 @@ const App: React.FC = () => {
           if (!state.ertMask[i]) return; 
         }
 
-        const fullMsg = state.ertBuffer.join('').split('\x0D')[0].trim();
+        const fullMsg = renderRdsBuffer(state.ertBuffer, true).split('\x0D')[0].trim();
         if (fullMsg.length > 0) {
           const last = state.ertHistoryBuffer[0];
           if (!last || last.text !== fullMsg) {
@@ -2169,7 +2190,7 @@ const App: React.FC = () => {
           let segmentText = "";
           let endReached = false;
           for (const b of bytes) {
-            segmentText += decodeRdsByte(b);
+            segmentText += String.fromCharCode(b);
             if (b === 0x0D) {
               endReached = true;
               break;
@@ -2250,7 +2271,7 @@ const App: React.FC = () => {
       const g2Spare = g2 & 0x07;
       const processErtTag = (id: number, start: number, len: number) => {
         if (id === 0) return;
-        const ertStr = state.ertBuffer.join('').split('\x0D')[0];
+        const ertStr = renderRdsBuffer(state.ertBuffer, true).split('\x0D')[0];
         const length = len + 1;
         // Always store the tag definition, even if text is currently incomplete
         let text = "";
@@ -2448,7 +2469,7 @@ const App: React.FC = () => {
           ertHistory: [...state.ertHistoryBuffer],
           ertPlusTags: (Array.from(state.ertPlusTags.values()) as RtPlusTag[]).sort((a, b) => a.contentType - b.contentType),
           ps: currentPs, 
-          longPs: renderRdsBuffer(state.lpsBuffer), 
+          longPs: renderRdsBuffer(state.lpsBuffer, true), 
           rtA: renderRdsBuffer(state.rtBuffer0), 
           rtB: renderRdsBuffer(state.rtBuffer1), 
           af: [...state.afSet], 
@@ -2507,6 +2528,7 @@ const App: React.FC = () => {
     packetCountRef.current = 0;
     setPacketCount(0);
 
+    stopRawPlayback();
     resetData();
     
     if (wsRef.current) {
@@ -2824,18 +2846,6 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const stopRawPlayback = () => {
-    if (playbackIntervalRef.current) {
-      clearInterval(playbackIntervalRef.current);
-      playbackIntervalRef.current = null;
-    }
-    decoderState.current.isPlayingRaw = false;
-    decoderState.current.rawPlaybackCurrent = 0;
-    decoderState.current.rawPlaybackTotal = 0;
-    rawPlaybackLinesRef.current = [];
-    decoderState.current.isDirty = true;
-  };
-
   const playRawFile = async (file: File) => {
     if (status === ConnectionStatus.CONNECTED || status === ConnectionStatus.CONNECTING) {
       disconnect();
@@ -3005,11 +3015,11 @@ const App: React.FC = () => {
                }}
              >
                <div 
-                 className="absolute inset-y-0 left-0 bg-green-900/40 transition-all duration-100" 
+                 className="absolute inset-y-0 left-0 bg-green-500/50 transition-all duration-100" 
                  style={{ width: `${(rdsData.rawPlaybackCurrent / rdsData.rawPlaybackTotal) * 100}%` }}
                ></div>
                <div className="relative z-10 w-full flex justify-end items-center gap-3">
-                 <span className="text-xs font-mono text-green-500 font-bold">
+                 <span className="text-xs font-mono text-white font-bold">
                    {rdsData.rawPlaybackCurrent}/{rdsData.rawPlaybackTotal}
                  </span>
                  <button 
