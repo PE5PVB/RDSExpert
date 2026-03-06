@@ -26,6 +26,64 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 <br>
 <br>
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
+## Data that can be decoded
+• General features for the station identification: <b>PI code</b>, <b>PS</b>, <b>TP/TA flags</b> (Traffic Program - Traffic Announcement) and <b>Music/Speech switch</b>.
+<br>
+• <b>Radiotext messages on Lines A and B</b>, with recognition of the maximal number of characters (64 if sent on 2A, 32 is sent on 2B).
+<br>
+• <b>PTY (Program Type)</b>.
+<br>
+• <b>PTYN (Program Type Name)</b> with A/B flag detection.
+<br>
+• <b>AF decoding for Methods A and B</b>, with the ability to sort decoded frequencies.
+<br>
+• <b>Long PS</b> (from Group 15A).
+<br>
+• <b>Clock Time</b> (Local and UTC values).
+<br>
+• <b>Enhanced Other Networks (EON)</b>.
+<br>
+• <b>Extended Country and Language Identification codes (ECC/LIC)</b> with country and language interpretation in tooltips.
+<br>
+• <b>EWS channel indication</b> (Emergency Warning System).
+<br>
+• <b>PIN data.</b>
+<br>
+• <b>ODA (Open Data Applications) presence indicator</b> with application recognition, using a database.
+<br>
+• <b>Decoder Identification flags</b>: Stereo, Artificial Head, Compressed, and Dynamic PTY.
+<br>
+• <b>Radiotext+ (RT+)</b> with tags identification and interpretation.
+<br>
+• <b>Traffic Message Channel (TMC)</b> with interpretation of the decoded messages, thanks to a database containing over 1500 event codes.
+<br>
+• <b>In House Applications (IH) data</b>, from channel 0 to 31.
+<br>
+• <b>Transparent Data Channels (TDC)</b>, from channel 0 to 31.
+<br>
+• <b>Standard Radio Paging (RP)</b>, with intelligent detection of the type of messages transmitted (Alphanumeric, Numeric, etc.) and decoding adapted to the messages type.
+<br>
+• <b>Enhanced Radiotext (eRT) with eRT+ tags</b> identification and interpretation.
+<br>
+• <b>DAB Cross-Referencing</b>, with the display of the listed Ensemble ID and its channel (In the "Groups Monitor").
+## Features
+• <b>Raw RDS data recording</b>, to make complete recordings of all decoded groups, in ASCII format. 
+<br>
+• <b>Raw RDS data playback</b>, to play recordings with real-time decoding, even many years later. All ASCII format recordings are supported, even from other RDS decoders.
+<br>
+• <b>Direct data export</b>, in PDF and TXT format.
+<br>
+• <b>Bandscan recording</b>, with all RDS data from the scanned stations, a received signals summary including the transmitters cities and powers (ERP), as well as the reception levels in dBf/dBuV. Exportable in PDF and TXT format.
+<br>
+• <b>Groups Monitor</b>, in order to explore and make a deep analysis of all the different groups transmitted on the decoded RDS. 
+<br>
+• <b>Map for TMC (Traffic Message Channel)</b>, to display the location of decoded events. Only works for certain countries, depending on location data availability.
+<br>
+• <b>PI to Callsign converter</b>, as a tooltip on the PI field, for the stations from the US.
+<br>
+• <b>Detection of the factory PI codes with manufacturers display</b>, thanks to a database.
+<br>
+• <b>BER (Bit Error Rate) indicator</b>, in order to determine the RDS decoding quality.
 ## Special thanks to...
 • [@mrwish7](https://github.com/mrwish7/) for the initial implementation of the RDS WebSocket decoding (thanks to his [ws2tcp](https://github.com/mrwish7/ws2tcp) repository), without which creating this tool would have been more complicated. 
 <br>
