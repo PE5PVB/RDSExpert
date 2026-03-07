@@ -2156,13 +2156,11 @@ const App: React.FC = () => {
         }
       };
       if (!isNaN(g3) && !isNaN(g4)) {
-        const abFlag = !!((g2 >> 9) & 0x01);
-        const address = g2 & 0x1F;
+        // Use Group 2A structure for eRT (4-bit address, bit 4 is A/B flag)
+        const abFlag = !!((g2 >> 4) & 0x01);
+        const address = g2 & 0x0F;
         
-        // Ensure we don't process eRT+ tag groups as eRT text if they share the same group ID
-        if (state.ertPlusOdaGroup !== null && address === state.ertPlusOdaGroup) {
-          // This is an eRT+ tag group, skip text processing
-        } else {
+
           if (state.ertLastAbFlag !== null && state.ertLastAbFlag !== abFlag) {
             archiveErt();
             state.ertBuffer.fill(' ');
@@ -2208,7 +2206,6 @@ const App: React.FC = () => {
           if (endReached) {
             archiveErt();
           }
-        }
       }
     } else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup && (groupTypeVal & 1) === 0) {
       state.hasRtPlus = true;
