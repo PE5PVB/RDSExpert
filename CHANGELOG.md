@@ -1,5 +1,10 @@
 # RDSExpert Changelog
 
+### --- 08/03/2026 ---
+• Added <0D> indicator in the Enhanced Radiotext history.
+• Added <0D> in the copied text for messages from the Enhanced Radiotext history.
+• Fixed a bug in the Enhanced Radiotext decoder that prevented messages in Latin characters from being displayed after decoding a message in non-Latin characters.
+
 ### --- 06/03/2026 ---
 - Fixed a bug that caused certain letters with accents to be displayed incorrectly in the Enhanced Radiotext history.
 - Fixed a bug that caused letters with accents to be displayed incorrectly when decoding was in progress on the Long PS.
@@ -134,6 +139,7 @@
 
 ### --- 06/12/2025 ---
 Official beginning of the project.
+
 
 
 
