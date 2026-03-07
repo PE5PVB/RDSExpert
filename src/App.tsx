@@ -2130,7 +2130,10 @@ const App: React.FC = () => {
           if (!state.ertMask[i]) return; 
         }
 
-        const fullMsg = renderRdsBuffer(state.ertBuffer, true).split('\x0D')[0].trim();
+        let fullMsg = renderRdsBuffer(state.ertBuffer, true).split('\x0D')[0].trim();
+        if (endCharIdx !== -1) {
+          fullMsg += '\x0D';
+        }
         if (fullMsg.length > 0) {
           const last = state.ertHistoryBuffer[0];
           if (!last || last.text !== fullMsg) {
@@ -3179,10 +3182,14 @@ const App: React.FC = () => {
           onClose={() => setShowErtHistory(false)}
           data={rdsData.ertHistory}
           getCopyText={(item) => {
+            const formattedText = item.text.split('').map(char => {
+              const code = char.charCodeAt(0);
+              return code < 32 ? `<${code.toString(16).toUpperCase().padStart(2, '0')}>` : char;
+            }).join('');
             const tagsText = item.tags && item.tags.length > 0 
               ? item.tags.map(tag => `\n  - ${tag.label} (ID ${tag.contentType}): ${tag.text}`).join('')
               : '';
-            return `[${item.time}] [GROUP: ${item.group}] ${item.text}${tagsText}`;
+            return `[${item.time}] [GROUP: ${item.group}] ${formattedText}${tagsText}`;
           }}
           renderHeader={() => (
             <tr className="border-b border-slate-700 text-slate-500 bg-slate-900 sticky top-0 z-10">
@@ -3196,7 +3203,20 @@ const App: React.FC = () => {
               <td className="p-3 text-slate-400 border-r border-slate-800/50 align-top">{item.time}</td>
               <td className="p-3 text-emerald-400 border-r border-slate-800/50 align-top font-bold">{item.group}</td>
               <td className="p-3 text-white leading-relaxed">
-                <div>{item.text}</div>
+                <div>
+                  {item.text.split('').map((char, idx) => {
+                    const code = char.charCodeAt(0);
+                    if (code < 32) {
+                      const hex = code.toString(16).toUpperCase().padStart(2, '0');
+                      return (
+                        <span key={idx} className="inline-block text-[0.6em] align-middle text-slate-500 font-bold bg-slate-900/50 rounded px-0.5 mx-px border border-slate-700 select-none">
+                          &lt;{hex}&gt;
+                        </span>
+                      );
+                    }
+                    return char;
+                  })}
+                </div>
                 {item.tags && item.tags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {item.tags.map((tag, idx) => (
