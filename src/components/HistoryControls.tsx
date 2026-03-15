@@ -387,7 +387,11 @@ export const HistoryControls: React.FC<HistoryControlsProps> = ({ data, onSetRec
                       hasOda: data.hasOda,
                       hasRtPlus: data.hasRtPlus,
                       hasEon: data.hasEon,
-                      hasTmc: data.hasTmc
+                      hasTmc: data.hasTmc,
+                      hasIh: data.hasIh,
+                      hasTdc: data.hasTdc,
+                      hasRp: data.hasRp,
+                      hasErt: data.hasErt
                   };
                   setSingleMetadata(metaToUse);
               } else {
@@ -918,7 +922,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 const infoText = `${entry.stationName} - ${cityShort}`;
                 const wrappedInfo = doc.splitTextToSize(infoText, 60);
                 const textHeight = wrappedInfo.length * 4;
-                const hasServices = entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.tp || entry.ta;
+                const hasServices = entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.hasIh || entry.hasTdc || entry.hasRp || entry.hasErt || entry.tp || entry.ta;
                 const minHeight = hasServices ? 13 : 10;
                 const rowHeight = Math.max(minHeight, textHeight + 5);
                 
@@ -993,7 +997,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 const infoText = `${entry.stationName} - ${cityShort}`;
                 const wrappedInfo = doc.splitTextToSize(infoText, 60);
                 const textHeight = wrappedInfo.length * 4;
-                const hasServices = !!(entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.tp || entry.ta);
+                const hasServices = !!(entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.hasIh || entry.hasTdc || entry.hasRp || entry.hasErt || entry.tp || entry.ta);
                 const minHeight = hasServices ? 13 : 10;
                 const rowHeight = Math.max(minHeight, textHeight + 5);
                 
@@ -1092,6 +1096,10 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                     if (entry.hasRtPlus) badges.push({ label: "RT+", color: [34, 197, 94] });
                     if (entry.hasEon) badges.push({ label: "EON", color: [234, 179, 8] });
                     if (entry.hasTmc) badges.push({ label: "TMC", color: [239, 68, 68] });
+                    if (entry.hasIh) badges.push({ label: "IH", color: [249, 115, 22] });
+                    if (entry.hasTdc) badges.push({ label: "TDC", color: [14, 165, 233] });
+                    if (entry.hasRp) badges.push({ label: "RP", color: [236, 72, 153] });
+                    if (entry.hasErt) badges.push({ label: "eRT", color: [20, 184, 166] });
 
                     const bW = 6.5;
                     const bH = 2.5;
@@ -1232,6 +1240,10 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
             if (entry.hasRtPlus) badgesDetail.push({ label: "RT+", color: [34, 197, 94] });
             if (entry.hasEon) badgesDetail.push({ label: "EON", color: [234, 179, 8] });
             if (entry.hasTmc) badgesDetail.push({ label: "TMC", color: [239, 68, 68] });
+            if (entry.hasIh) badgesDetail.push({ label: "IH", color: [249, 115, 22] });
+            if (entry.hasTdc) badgesDetail.push({ label: "TDC", color: [14, 165, 233] });
+            if (entry.hasRp) badgesDetail.push({ label: "RP", color: [236, 72, 153] });
+            if (entry.hasErt) badgesDetail.push({ label: "eRT", color: [20, 184, 166] });
 
             if (badgesDetail.length > 0) {
                 const bW = 10;
@@ -1451,7 +1463,7 @@ const ExportModal: React.FC<{ title: string, content: string, pi: string, onClos
                 const infoText = `${entry.stationName} - ${cityShort}`;
                 const wrappedInfo = doc.splitTextToSize(infoText, 60);
                 const textHeight = wrappedInfo.length * 4;
-                const hasServices = !!(entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.tp || entry.ta);
+                const hasServices = !!(entry.hasOda || entry.hasRtPlus || entry.hasEon || entry.hasTmc || entry.hasIh || entry.hasTdc || entry.hasRp || entry.hasErt || entry.tp || entry.ta);
                 const minHeight = hasServices ? 13 : 10;
                 const rowHeight = Math.max(minHeight, textHeight + 5);
                 
