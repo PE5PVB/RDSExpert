@@ -1,7 +1,7 @@
 # RDSExpert Changelog
 
 ### --- 15/03/2026 ---
-- Added IH, TDC, RP and eRT indicators on the data and bandscan PDF exports.
+- Added IH (In House Applications), TDC (Transparent Data Channels), RP (Radio Paging) and eRT (Enhanced Radiotext) indicators on the data and bandscan PDF exports.
 - Added "Instant Playback" function for Raw Data playback. This allows you to view all the RDS data contained in a recording without having to wait for real-time decoding. You can still use real-time decoding by selecting "Normal Playback" displayed after clicking on the "Raw Data" playback button.
 
 ### --- 08/03/2026 ---
