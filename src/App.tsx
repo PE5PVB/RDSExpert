@@ -560,6 +560,8 @@ const App: React.FC = () => {
   const [lastRawPacket, setLastRawPacket] = useState<string>("Waiting for data...");
   const [packetCount, setPacketCount] = useState<number>(0);
   const [showSecurityError, setShowSecurityError] = useState<boolean>(false);
+  const [showRawMenu, setShowRawMenu] = useState<boolean>(false);
+  const rawPlaybackModeRef = useRef<'normal' | 'instant'>('normal');
   const [analyzerActive, setAnalyzerActive] = useState<boolean>(false);
   const analyzerActiveRef = useRef<boolean>(false);
   const [tmcActive, setTmcActive] = useState<boolean>(false);
@@ -999,7 +1001,11 @@ const App: React.FC = () => {
         hasOda: state.hasOda,
         hasRtPlus: state.hasRtPlus,
         hasEon: state.hasEon,
-        hasTmc: state.hasTmc
+        hasTmc: state.hasTmc,
+        hasIh: state.hasIh,
+        hasTdc: state.hasTdc,
+        hasRp: state.hasRp,
+        hasErt: state.hasErt
     };
 
     state.bandscanEntries.push(entry);
@@ -1461,8 +1467,8 @@ const App: React.FC = () => {
                         }); 
                         if (state.psHistoryBuffer.length > 200) state.psHistoryBuffer.pop();
                         state.psHistoryLogged = true; 
-                    } else if (last.ptyn.trim() === "" && currentPtynForArchive.trim() !== "") {
-                        // Same PS/PTY but PTYN just arrived -> Update existing entry to avoid duplicates
+                    } else if (last.ptyn !== currentPtynForArchive && currentPtynForArchive.trim() !== "") {
+                        // Same PS/PTY but PTYN just arrived or updated -> Update existing entry to avoid duplicates
                         last.ptyn = currentPtynForArchive;
                     }
                 }
@@ -2872,44 +2878,113 @@ const App: React.FC = () => {
     decoderState.current.rawPlaybackCurrent = 0;
     decoderState.current.isDirty = true;
     
-    playbackIntervalRef.current = setInterval(() => {
-      const state = decoderState.current;
-      if (state.rawPlaybackCurrent >= lines.length) {
+    if (rawPlaybackModeRef.current === 'instant') {
+      const originalDateNow = Date.now;
+      let virtualTime = originalDateNow();
+      Date.now = () => virtualTime;
+      
+      try {
+        const state = decoderState.current;
+        for (let i = 0; i < lines.length; i++) {
+          const parts = lines[i];
+          const hasError = parts.some(p => p.includes('-'));
+          
+          if (hasError) {
+            if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+              updateBer(true);
+            }
+            state.groupTotal++;
+            state.groupCounts["--"] = (state.groupCounts["--"] || 0) + 1;
+            if (analyzerActiveRef.current) {
+              state.groupSequence.push("--");
+            }
+          } else {
+            const g1 = parseInt(parts[0], 16);
+            const g2 = parseInt(parts[1], 16);
+            const g3 = parseInt(parts[2], 16);
+            const g4 = parseInt(parts[3], 16);
+            
+            decodeRdsGroup(g1, g2, g3, g4);
+            if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+              updateBer(false);
+            }
+          }
+          
+          state.rawPlaybackCurrent++;
+          virtualTime += 88;
+          
+          const cRtBuf = state.abFlag ? state.rtBuffer1 : state.rtBuffer0; 
+          const cRtMsk = state.abFlag ? state.rtMask1 : state.rtMask0;
+          const termIdx = cRtBuf.indexOf('\r'); 
+          let isRtC = termIdx !== -1 ? cRtMsk.slice(0, termIdx).every(Boolean) : cRtMsk.every(Boolean);
+          let rawRt = renderRdsBuffer(cRtBuf); 
+          if (termIdx !== -1) {
+            rawRt = rawRt.substring(0, termIdx + 1);
+          }
+          if (isRtC) {
+            if (rawRt !== state.rtCandidateString) { 
+              state.rtCandidateString = rawRt; 
+              state.rtStableSince = virtualTime; 
+            }
+            if (virtualTime - state.rtStableSince >= 2000) {
+              const last = state.rtHistoryBuffer[0];
+              if ((!last || last.text !== rawRt) && rawRt.trim().length > 0) { 
+                state.rtHistoryBuffer.unshift({ 
+                  time: new Date(virtualTime).toLocaleTimeString(), 
+                  text: rawRt 
+                }); 
+                if (state.rtHistoryBuffer.length > 200) {
+                  state.rtHistoryBuffer.pop();
+                }
+              }
+            }
+          }
+        }
+        state.isDirty = true;
         stopRawPlayback();
-        return;
+      } finally {
+        Date.now = originalDateNow;
       }
-      
-      const parts = lines[state.rawPlaybackCurrent];
-      const hasError = parts.some(p => p.includes('-'));
-      
-      if (hasError) {
-        if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
-          updateBer(true);
+    } else {
+      playbackIntervalRef.current = setInterval(() => {
+        const state = decoderState.current;
+        if (state.rawPlaybackCurrent >= lines.length) {
+          stopRawPlayback();
+          return;
         }
-        state.groupTotal++;
-        state.groupCounts["--"] = (state.groupCounts["--"] || 0) + 1;
-        if (analyzerActiveRef.current) {
-          state.groupSequence.push("--");
-        }
-      } else {
-        const g1 = parseInt(parts[0], 16);
-        const g2 = parseInt(parts[1], 16);
-        const g3 = parseInt(parts[2], 16);
-        const g4 = parseInt(parts[3], 16);
         
-        decodeRdsGroup(g1, g2, g3, g4);
-        if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
-          updateBer(false);
+        const parts = lines[state.rawPlaybackCurrent];
+        const hasError = parts.some(p => p.includes('-'));
+        
+        if (hasError) {
+          if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+            updateBer(true);
+          }
+          state.groupTotal++;
+          state.groupCounts["--"] = (state.groupCounts["--"] || 0) + 1;
+          if (analyzerActiveRef.current) {
+            state.groupSequence.push("--");
+          }
+        } else {
+          const g1 = parseInt(parts[0], 16);
+          const g2 = parseInt(parts[1], 16);
+          const g3 = parseInt(parts[2], 16);
+          const g4 = parseInt(parts[3], 16);
+          
+          decodeRdsGroup(g1, g2, g3, g4);
+          if (state.currentPi !== "----" && (Date.now() - state.piEstablishmentTime) >= 3000) {
+            updateBer(false);
+          }
         }
-      }
-      
-      state.rawPlaybackCurrent++;
-      state.isDirty = true;
-    }, 88);
+        
+        state.rawPlaybackCurrent++;
+        state.isDirty = true;
+      }, 88);
+    }
   };
 
   const handlePlayRawClick = () => {
-    fileInputRef.current?.click();
+    setShowRawMenu((prev) => !prev);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2944,13 +3019,39 @@ const App: React.FC = () => {
                   <i className="fa-solid fa-circle-info text-sm md:text-base"></i>
                 </a>
 
-                <button 
-                  onClick={handlePlayRawClick}
-                  className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center gap-2 text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors order-3 md:order-2 flex-none text-[10px] md:text-xs font-bold uppercase"
-                >
-                  <i className="fa-solid fa-play"></i>
-                  <span>RAW DATA</span>
-                </button>
+                <div className="relative order-3 md:order-2 flex-none">
+                  <button 
+                    onClick={handlePlayRawClick}
+                    className="bg-slate-900/50 border border-slate-800 rounded px-2 py-1.5 md:px-3 md:py-2 flex items-center justify-center gap-2 text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-colors w-full h-full text-[10px] md:text-xs font-bold uppercase"
+                  >
+                    <i className="fa-solid fa-play"></i>
+                    <span>RAW DATA</span>
+                  </button>
+                  {showRawMenu && (
+                    <div className="absolute top-full left-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded shadow-lg z-50 flex flex-col overflow-hidden">
+                      <button 
+                        onClick={() => {
+                          rawPlaybackModeRef.current = 'normal';
+                          setShowRawMenu(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="px-3 py-2 text-left text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-blue-400 transition-colors"
+                      >
+                        NORMAL PLAYBACK
+                      </button>
+                      <button 
+                        onClick={() => {
+                          rawPlaybackModeRef.current = 'instant';
+                          setShowRawMenu(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="px-3 py-2 text-left text-[10px] md:text-xs font-bold text-slate-300 hover:bg-slate-700 hover:text-blue-400 transition-colors"
+                      >
+                        INSTANT PLAYBACK
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
