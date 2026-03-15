@@ -98,6 +98,10 @@ export interface BandscanEntry {
     hasRtPlus?: boolean;
     hasEon?: boolean;
     hasTmc?: boolean;
+    hasIh?: boolean;
+    hasTdc?: boolean;
+    hasRp?: boolean;
+    hasErt?: boolean;
     isDynamic?: boolean;
 }
 
