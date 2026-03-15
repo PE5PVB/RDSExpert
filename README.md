@@ -89,7 +89,7 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 • <b>Raw RDS data recording</b>, to make complete recordings of all decoded groups, in ASCII format. 
 <br>
 <br>
-• <b>Raw RDS data playback</b>, to play recordings with real-time decoding, even many years later. All ASCII format recordings are supported, even from other RDS decoders.
+• <b>Raw RDS data playback</b>, to play recordings with real-time or instant decoding, even many years later. All ASCII format recordings are supported, even from other RDS decoders.
 <br>
 <br>
 • <b>Direct data export</b>, in PDF and TXT format.
