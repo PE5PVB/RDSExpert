@@ -1,5 +1,4 @@
 # RDSExpert | Introduction
-
 RDSExpert is an advanced RDS (Radio Data System) decoder for [TEF webservers](https://servers.fmdx.org/), based on HTML and TypeScript.
 <br>
 It is also designed for RBDS (RDS variant for North America).
@@ -122,9 +121,7 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 <br>
 <br>
 • All those who submitted suggestions, ideas, bug reports and who took the time to test this tool with different types of RDS encoders.
-
 # Integrate RDSExpert into your TEF webserver as a plugin!
-
 If you want to use RDSExpert directly on your TEF webserver, this plugin is made for you!
 <br>
 <br>
@@ -136,9 +133,11 @@ No need to open a new tab in your web browser and enter your server URL every ti
 To download the plugin and install it on your webserver, [follow the instructions by clicking here.](https://github.com/LucasGallone/RDSExpert-Plugin)
 <br>
 Or copy-paste the following link: `https://github.com/LucasGallone/RDSExpert-Plugin`
-
 # Getting started | Help documentation
-
 Learn how to use RDSExpert and find out more about the various functions offered by the decoder:
 <br>
 [Go to the Wiki section by clicking here.](https://github.com/LucasGallone/RDSExpert/wiki/)
+# License
+This project is licensed under the GNU General Public License (GPL) v3.0.
+<br>
+Please refer to the `LICENSE` file for more details.
