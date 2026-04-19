@@ -1,4 +1,6 @@
 # RDSExpert | Introduction
+![affichage-principal-rdsexpert-rsz](https://github.com/user-attachments/assets/c9a183f1-1b2c-4249-a6ce-ad8e40bf5bca)
+- - -
 RDSExpert is an advanced RDS (Radio Data System) decoder for [TEF webservers](https://servers.fmdx.org/), based on HTML and TypeScript.
 <br>
 It is also designed for RBDS (RDS variant for North America).
