@@ -1,9 +1,10 @@
 # RDSExpert | Introduction
-![affichage-principal-rdsexpert-rsz](https://github.com/user-attachments/assets/c9a183f1-1b2c-4249-a6ce-ad8e40bf5bca)
-- - -
-RDSExpert is an advanced RDS (Radio Data System) decoder for [TEF webservers](https://servers.fmdx.org/), based on HTML and TypeScript.
+RDSExpert is an advanced RDS (Radio Data System) decoder for [FM-DX webservers](https://servers.fmdx.org/), based on HTML and TypeScript.
 <br>
 It is also designed for RBDS (RDS variant for North America).
+
+
+![affichage-principal-rdsexpert-rsz](https://github.com/user-attachments/assets/c9a183f1-1b2c-4249-a6ce-ad8e40bf5bca)
 - - -
 -> [You can access the interface by clicking on this link.](https://lucasgallone.github.io/RDSExpert)
 <br>
@@ -14,7 +15,7 @@ It is also designed for RBDS (RDS variant for North America).
 This tool will be of particular interest to radio engineers and anyone with an interest in radio engineering. Its purpose is to allow in-depth analysis of the RDS data carried by FM signals, which webservers cannot completely display for obvious usability reasons.
 <br>
 <br>
-<b>It is important to note that the RDS decoding is less sensitive than that used natively by TEF webservers.</b> Therefore, an "acceptable" signal is necessary for accurate decoding. While it would be technically possible to increase the decoding sensitivity, this would increase the risk of displaying erroneous data, making the tool less reliable. For DX receptions and very weak signals, it is therefore strongly recommended to use the integrated decoder of the TEF webservers.
+<b>It is important to note that the RDS decoding is less sensitive than that used natively by FM-DX webservers.</b> Therefore, an "acceptable" signal is necessary for accurate decoding. While it would be technically possible to increase the decoding sensitivity, this would increase the risk of displaying erroneous data, making the tool less reliable. For DX receptions and very weak signals, it is therefore strongly recommended to use the integrated decoder of the FM-DX webservers.
 <br>
 <br>
 <b>Initially, this tool only works with HTTPS servers due to web browsers restrictions.
@@ -129,8 +130,8 @@ If you really have to use a local IP address (e.g. 192.168.1.100), your only opt
 <br>
 <br>
 • All those who submitted suggestions, ideas, bug reports and who took the time to test this tool with different types of RDS encoders.
-# Integrate RDSExpert into your TEF webserver as a plugin!
-If you want to use RDSExpert directly on your TEF webserver, this plugin is made for you!
+# Integrate RDSExpert into your FM-DX webserver as a plugin!
+If you want to use RDSExpert directly on your FM-DX webserver, this plugin is made for you!
 <br>
 <br>
 The integrated interface allows you to use the decoder in a compact and direct way thanks to a floating window on the server.
