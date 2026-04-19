@@ -2,15 +2,13 @@
 RDSExpert is an advanced RDS (Radio Data System) decoder for [TEF webservers](https://servers.fmdx.org/), based on HTML and TypeScript.
 <br>
 It is also designed for RBDS (RDS variant for North America).
-<br>
-<br>
+- - -
 -> [You can access the interface by clicking on this link.](https://lucasgallone.github.io/RDSExpert)
 <br>
 -> Otherwise, you can copy and paste the following URL: `https://lucasgallone.github.io/RDSExpert/`
 <br>
 -> You can also integrate RDSExpert directly into your webserver as a plugin! Instructions are provided below.
-<br>
-<br>
+- - -
 This tool will be of particular interest to radio engineers and anyone with an interest in radio engineering. Its purpose is to allow in-depth analysis of the RDS data carried by FM signals, which webservers cannot completely display for obvious usability reasons.
 <br>
 <br>
@@ -22,14 +20,17 @@ This tool will be of particular interest to radio engineers and anyone with an i
 Another version hosted by [@Bkram](https://github.com/bkram/) exists, and you will be linked to it if you indicate an HTTP webserver URL on the interface.</b>
 <br>
 Follow the on-screen instructions after indicating it, and you'll be able to use the tool that way.
-<br>
-<br>
+- - -
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
+- - -
+<b>⚠️ As of April 19, 2026, connecting to HTTP servers using a local IP address (e.g. localhost, 192.168.1.100, etc.) is no longer possible via Google Chrome, for reasons beyond my control.
+<br>
+This is due to a recent browser update, in which Google has tightened its rules regarding "Private Network Access" (PNA).
 <br>
 <br>
-<b>⚠️ As of April 19, 2026, connections to HTTP servers no longer work in Google Chrome. This is due to a recent update released for the browser.
+Connecting to HTTP servers using a public IP address is still possible. I therefore recommend using a public IP address to connect if your server is public.
 <br>
-I'm currently investigating the issue and try to resolve it. In the meantime, the only solution (a temporary one, I hope!) is to use a different web browser if you wish to use RDSExpert with an HTTP server.</b>
+If you really have to use a local IP address (e.g. 192.168.1.100), your only option is to use a different web browser, such as Mozilla Firefox.</b>
 ## Data that can be decoded
 • General features for the station identification: <b>PI code</b>, <b>PS</b>, <b>TP/TA flags</b> (Traffic Program - Traffic Announcement) and <b>Music/Speech switch</b>.
 <br>
