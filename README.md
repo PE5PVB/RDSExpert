@@ -25,6 +25,11 @@ Follow the on-screen instructions after indicating it, and you'll be able to use
 <br>
 <br>
 <b>📱 RDSExpert is also available as a mobile version. However, you must rotate your smartphone to landscape mode to use the interface.</b>
+<br>
+<br>
+<b>⚠️ As of April 19, 2026, connections to HTTP servers no longer work in Google Chrome. This is due to a recent update released for the browser.
+<br>
+I'm currently investigating the issue and try to resolve it. In the meantime, the only solution (a temporary one, I hope!) is to use a different web browser if you wish to use RDSExpert with an HTTP server.</b>
 ## Data that can be decoded
 • General features for the station identification: <b>PI code</b>, <b>PS</b>, <b>TP/TA flags</b> (Traffic Program - Traffic Announcement) and <b>Music/Speech switch</b>.
 <br>
